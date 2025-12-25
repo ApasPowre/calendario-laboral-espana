@@ -82,16 +82,237 @@ class BaseScraper(ABC):
     @abstractmethod
     def parse_festivos(self, content: str) -> List[Dict]:
         """
-        Parsea el contenido descargado y extrae los festivos.
-        Debe ser implementado por cada scraper específico.
-        
-        Args:
-            content: Contenido HTML/XML descargado
-            
-        Returns:
-            Lista de diccionarios con festivos estructurados
+        Parsea festivos desde el contenido del BOE.
+        Estrategia genérica: buscar fechas + descripciones cercanas
         """
-        pass
+        festivos = []
+        
+        print("🔍 Parseando festivos...")
+        
+        # ESTRATEGIA 1: Buscar tabla HTML estructurada
+        festivos_tabla = self._parse_tabla_html(content)
+        if festivos_tabla and len(festivos_tabla) >= 8:
+            print(f"   ✅ Método: Tabla HTML estructurada")
+            return festivos_tabla
+        
+        # ESTRATEGIA 2: Buscar patrones de texto con fechas
+        festivos_texto = self._parse_texto_patrones(content)
+        if festivos_texto and len(festivos_texto) >= 8:
+            print(f"   ✅ Método: Patrones de texto")
+            return festivos_texto
+        
+        # ESTRATEGIA 3: Fallback - patrones conocidos (actual)
+        festivos_conocidos = self._parse_patrones_conocidos(content)
+        if festivos_conocidos:
+            print(f"   ⚠️  Método: Patrones conocidos (fallback)")
+            return festivos_conocidos
+        
+        return []
+    
+    def _parse_tabla_html(self, content: str) -> List[Dict]:
+        """Parsea tabla HTML del BOE"""
+        try:
+            from bs4 import BeautifulSoup
+            
+            soup = BeautifulSoup(content, 'lxml')
+            festivos = []
+            
+            # Buscar todas las tablas
+            tablas = soup.find_all('table')
+            
+            for tabla in tablas:
+                filas = tabla.find_all('tr')
+                
+                for fila in filas:
+                    celdas = fila.find_all(['td', 'th'])
+                    if len(celdas) < 2:
+                        continue
+                    
+                    texto_fila = ' '.join([c.get_text(strip=True) for c in celdas])
+                    
+                    # Buscar fechas en formato "1 de enero", "6 de enero", etc.
+                    fecha_match = self._extraer_fecha_de_texto(texto_fila)
+                    
+                    if fecha_match:
+                        fecha_iso, fecha_texto = fecha_match
+                        
+                        # Extraer descripción (eliminar la fecha del texto)
+                        descripcion = texto_fila.replace(fecha_texto, '').strip()
+                        descripcion = re.sub(r'^\d+\s*', '', descripcion)  # Quitar número inicial
+                        descripcion = descripcion.strip('.,;:-')
+                        
+                        if descripcion and len(descripcion) > 3:
+                            festivos.append({
+                                'fecha': fecha_iso,
+                                'fecha_texto': fecha_texto,
+                                'descripcion': descripcion.title(),
+                                'tipo': 'nacional',
+                                'ambito': 'nacional',
+                                'sustituible': False,
+                                'year': self.year
+                            })
+            
+            # Deduplicar por fecha
+            fechas_vistas = set()
+            festivos_unicos = []
+            for f in festivos:
+                if f['fecha'] not in fechas_vistas:
+                    fechas_vistas.add(f['fecha'])
+                    festivos_unicos.append(f)
+            
+            return festivos_unicos
+            
+        except Exception as e:
+            print(f"   ⚠️  Error en parse_tabla_html: {e}")
+            return []
+    
+    def _parse_texto_patrones(self, content: str) -> List[Dict]:
+        """Parsea texto buscando patrones de fecha + descripción"""
+        try:
+            festivos = []
+            
+            # Dividir en líneas
+            lineas = content.split('\n')
+            
+            for linea in lineas:
+                # Buscar líneas que contengan fechas
+                fecha_match = self._extraer_fecha_de_texto(linea)
+                
+                if fecha_match:
+                    fecha_iso, fecha_texto = fecha_match
+                    
+                    # La descripción es lo que viene después de la fecha
+                    # Eliminar la fecha del texto
+                    resto = linea.replace(fecha_texto, '')
+                    
+                    # Limpiar
+                    resto = re.sub(r'^\d+\s*[.)\-:]\s*', '', resto)  # Quitar numeración
+                    resto = resto.strip('.,;:-()[]')
+                    
+                    if resto and len(resto) > 3:
+                        # Tomar hasta el primer punto o 100 caracteres
+                        descripcion = resto.split('.')[0][:100].strip()
+                        
+                        if descripcion:
+                            festivos.append({
+                                'fecha': fecha_iso,
+                                'fecha_texto': fecha_texto,
+                                'descripcion': descripcion.title(),
+                                'tipo': 'nacional',
+                                'ambito': 'nacional',
+                                'sustituible': False,
+                                'year': self.year
+                            })
+            
+            # Deduplicar
+            fechas_vistas = set()
+            festivos_unicos = []
+            for f in festivos:
+                if f['fecha'] not in fechas_vistas:
+                    fechas_vistas.add(f['fecha'])
+                    festivos_unicos.append(f)
+            
+            return festivos_unicos
+            
+        except Exception as e:
+            print(f"   ⚠️  Error en parse_texto_patrones: {e}")
+            return []
+    
+    def _extraer_fecha_de_texto(self, texto: str) -> Optional[tuple]:
+        """
+        Extrae fecha de un texto en formato español.
+        Retorna (fecha_iso, fecha_texto) o None
+        """
+        texto_lower = texto.lower()
+        
+        # Patrón: "1 de enero", "6 de enero", etc.
+        patron = r'(\d{1,2})\s+de\s+(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)'
+        match = re.search(patron, texto_lower)
+        
+        if match:
+            dia = int(match.group(1))
+            mes_texto = match.group(2)
+            fecha_texto = f"{dia} de {mes_texto}"
+            
+            # Convertir a fecha ISO
+            meses = {
+                'enero': 1, 'febrero': 2, 'marzo': 3, 'abril': 4,
+                'mayo': 5, 'junio': 6, 'julio': 7, 'agosto': 8,
+                'septiembre': 9, 'octubre': 10, 'noviembre': 11, 'diciembre': 12
+            }
+            
+            mes = meses.get(mes_texto)
+            if mes:
+                fecha_iso = f"{self.year}-{mes:02d}-{dia:02d}"
+                return (fecha_iso, fecha_texto)
+        
+        return None
+    
+    def _parse_patrones_conocidos(self, content: str) -> List[Dict]:
+        """
+        Fallback: Patrones conocidos específicos
+        Solo se usa si los otros métodos fallan
+        """
+        festivos = []
+        
+        # Lista de festivos nacionales conocidos (siempre son estos)
+        festivos_conocidos = [
+            (1, 'enero', 'Año Nuevo', False),
+            (6, 'enero', 'Epifanía del Señor', True),
+            (None, None, 'Jueves Santo', True),  # Fecha variable
+            (None, None, 'Viernes Santo', False),  # Fecha variable
+            (1, 'mayo', 'Fiesta del Trabajo', False),
+            (15, 'agosto', 'Asunción de la Virgen', True),
+            (12, 'octubre', 'Fiesta Nacional de España', False),
+            (1, 'noviembre', 'Todos los Santos', True),
+            (6, 'diciembre', 'Día de la Constitución Española', False),
+            (8, 'diciembre', 'Inmaculada Concepción', True),
+            (25, 'diciembre', 'Natividad del Señor', False),
+        ]
+        
+        # Buscar cada uno en el contenido
+        for dia, mes_texto, descripcion, sustituible in festivos_conocidos:
+            if dia and mes_texto:
+                # Fecha fija
+                meses = {
+                    'enero': 1, 'febrero': 2, 'marzo': 3, 'abril': 4,
+                    'mayo': 5, 'junio': 6, 'julio': 7, 'agosto': 8,
+                    'septiembre': 9, 'octubre': 10, 'noviembre': 11, 'diciembre': 12
+                }
+                mes = meses[mes_texto]
+                fecha_iso = f"{self.year}-{mes:02d}-{dia:02d}"
+                fecha_texto = f"{dia} de {mes_texto}"
+                
+                festivos.append({
+                    'fecha': fecha_iso,
+                    'fecha_texto': fecha_texto,
+                    'descripcion': descripcion,
+                    'tipo': 'nacional',
+                    'ambito': 'nacional',
+                    'sustituible': sustituible,
+                    'year': self.year
+                })
+            else:
+                # Fecha variable (Semana Santa) - buscar en el contenido
+                if descripcion.lower() in content.lower():
+                    # Intentar extraer la fecha del contexto
+                    idx = content.lower().find(descripcion.lower())
+                    contexto = content[max(0, idx-100):min(len(content), idx+100)]
+                    
+                    fecha_match = self._extraer_fecha_de_texto(contexto)
+                    if fecha_match:
+                        fecha_iso, fecha_texto = fecha_match
+                        festivos.append({
+                            'fecha': fecha_iso,
+                            'fecha_texto': fecha_texto,
+                            'descripcion': descripcion,
+                            'tipo': 'nacional',
+                            'ambito': 'nacional',
+                            'sustituible': sustituible if descripcion == 'Jueves Santo' else False,
+                            'year': self.year
+                        })
+        
+        return festivos
     
     def fetch_content(self, url: str, encoding: str = 'utf-8') -> Optional[str]:
         """

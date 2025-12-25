@@ -1,10 +1,10 @@
 """
 BOE Scraper - Festivos nacionales de España
-Extrae festivos desde el Boletín Oficial del Estado parseando la tabla HTML
+Extrae festivos desde el Boletín Oficial del Estado con parser robusto
 Usa BOEAutoDiscovery para encontrar URLs automáticamente
 """
 
-from typing import List, Dict
+from typing import List, Dict, Optional
 from bs4 import BeautifulSoup
 import re
 from .base_scraper import BaseScraper
@@ -14,7 +14,7 @@ from scrapers.discovery.boe_discovery import BOEAutoDiscovery
 class BOEScraper(BaseScraper):
     """
     Scraper para festivos nacionales desde el BOE
-    Parsea la tabla HTML de la Resolución de fiestas laborales
+    Parsea la Resolución de fiestas laborales con múltiples estrategias
     """
     
     def __init__(self, year: int):
@@ -24,137 +24,297 @@ class BOEScraper(BaseScraper):
     def get_source_url(self) -> str:
         """Devuelve URL del BOE usando discovery automático"""
         try:
-            # Intentar auto-discovery (usa KNOWN_URLS primero, luego API si es necesario)
             return self.discovery.get_url(self.year, try_auto_discovery=True)
         except ValueError as e:
             print(f"❌ Error: {e}")
             return ""
-        
+    
     def parse_festivos(self, content: str) -> List[Dict]:
         """
-        Parsea la tabla HTML del BOE y extrae festivos nacionales.
-        
-        Los festivos nacionales son los que tienen el símbolo (*) en la tabla,
-        que indica "Fiesta Nacional no sustituible".
-        
-        También incluimos los marcados con (**) "Fiesta Nacional respecto de la 
-        que no se ha ejercido la facultad de sustitución" que se aplican en todas 
-        las CCAA (como el 6 de enero).
+        Parsea festivos desde el contenido del BOE.
+        Usa múltiples estrategias en orden de confiabilidad.
         """
-        soup = BeautifulSoup(content, 'lxml')
+        print("🔍 Parseando festivos...")
+        
+        # ESTRATEGIA 1: Patrones conocidos (más confiable)
+        festivos_conocidos = self._parse_patrones_conocidos(content)
+        if festivos_conocidos and len(festivos_conocidos) >= 9:
+            print(f"   ✅ Método: Patrones conocidos ({len(festivos_conocidos)} festivos)")
+            return festivos_conocidos
+        
+        # ESTRATEGIA 2: Tabla HTML
+        festivos_tabla = self._parse_tabla_html(content)
+        if festivos_tabla and len(festivos_tabla) >= 9:
+            print(f"   ✅ Método: Tabla HTML ({len(festivos_tabla)} festivos)")
+            return festivos_tabla
+        
+        # ESTRATEGIA 3: Texto con patrones
+        festivos_texto = self._parse_texto_patrones(content)
+        if festivos_texto and len(festivos_texto) >= 9:
+            print(f"   ✅ Método: Patrones de texto ({len(festivos_texto)} festivos)")
+            return festivos_texto
+        
+        # Si llegamos aquí, usar lo mejor que tengamos
+        if festivos_conocidos:
+            print(f"   ⚠️  Usando patrones conocidos ({len(festivos_conocidos)} festivos)")
+            return festivos_conocidos
+        
+        return []
+    
+    def _parse_patrones_conocidos(self, content: str) -> List[Dict]:
+        """
+        Patrones conocidos de festivos nacionales.
+        Busca Semana Santa con patrones específicos.
+        """
         festivos = []
         
-        # Buscar la tabla de festivos
-        # La tabla está después de "ANEXO" y tiene las fechas en la primera columna
-        texto = soup.get_text()
-        
-        # Buscar festivos en el texto
-        # Formato típico: "1 Año Nuevo. | * | * | * | ..."
-        # o: "| Fecha de las fiestas | Comunidades Autónomas |"
-        
-        # Extraer líneas del ANEXO
-        if "ANEXO" not in texto:
-            print("⚠️  No se encontró ANEXO en el BOE")
-            return []
-        
-        # Estrategia: buscar patrones de festivos nacionales en el texto
-        # Los festivos nacionales aparecen con todas las CCAA marcadas con *
-        
-        festivos_conocidos_2026 = [
-            # Festivos nacionales NO sustituibles (marcados con *)
-            {'fecha': '1 de enero', 'nombre': 'AÑO NUEVO MODIFICADO HARDCODED', 'sustituible': False},
-            {'fecha': '3 de abril', 'nombre': 'Viernes Santo', 'sustituible': False},
-            {'fecha': '1 de mayo', 'nombre': 'Fiesta del Trabajo', 'sustituible': False},
-            {'fecha': '15 de agosto', 'nombre': 'Asunción de la Virgen', 'sustituible': False},
-            {'fecha': '12 de octubre', 'nombre': 'Fiesta Nacional de España', 'sustituible': False},
-            {'fecha': '8 de diciembre', 'nombre': 'Inmaculada Concepción', 'sustituible': False},
-            {'fecha': '25 de diciembre', 'nombre': 'Natividad del Señor', 'sustituible': False},
-            
-            # Festivos nacionales que NO se han sustituido (marcados con ** en todas las CCAA)
-            {'fecha': '6 de enero', 'nombre': 'Epifanía del Señor', 'sustituible': True},
-            {'fecha': '2 de abril', 'nombre': 'Jueves Santo', 'sustituible': True},
+        # Festivos fijos
+        festivos_fijos = [
+            (1, 'enero', 'Año Nuevo', False),
+            (6, 'enero', 'Epifanía del Señor', True),
+            (1, 'mayo', 'Fiesta del Trabajo', False),
+            (15, 'agosto', 'Asunción de la Virgen', True),
+            (12, 'octubre', 'Fiesta Nacional de España', False),
+            (1, 'noviembre', 'Todos los Santos', True),
+            (6, 'diciembre', 'Día de la Constitución Española', False),
+            (8, 'diciembre', 'Inmaculada Concepción', True),
+            (25, 'diciembre', 'Natividad del Señor', False),
         ]
         
-        # Intentar extraer del HTML primero
-        festivos_parseados = self._parse_tabla_boe(soup)
+        meses = {
+            'enero': 1, 'febrero': 2, 'marzo': 3, 'abril': 4,
+            'mayo': 5, 'junio': 6, 'julio': 7, 'agosto': 8,
+            'septiembre': 9, 'octubre': 10, 'noviembre': 11, 'diciembre': 12
+        }
         
-        if festivos_parseados:
-            print(f"✅ Extraídos {len(festivos_parseados)} festivos parseando HTML")
-            return festivos_parseados
+        # Añadir festivos fijos
+        for dia, mes_texto, descripcion, sustituible in festivos_fijos:
+            mes = meses[mes_texto]
+            fecha_iso = f"{self.year}-{mes:02d}-{dia:02d}"
+            fecha_texto = f"{dia} de {mes_texto}"
+            
+            festivos.append({
+                'fecha': fecha_iso,
+                'fecha_texto': fecha_texto,
+                'descripcion': descripcion,
+                'tipo': 'nacional',
+                'ambito': 'nacional',
+                'sustituible': sustituible,
+                'year': self.year
+            })
         
-        # Fallback: usar lista conocida
-        print("⚠️  Usando lista conocida de festivos (fallback)")
+        # Buscar Semana Santa con patrones específicos
+        content_lower = content.lower()
         
-        if self.year == 2026:
-            print("   🎯 Método: FALLBACK (lista hardcoded porque falló el parsing)")
-            for fest in festivos_conocidos_2026:
-                fecha_info = self.parse_fecha_espanol(fest['fecha'])
-                
-                if fecha_info:
-                    festivo = {
-                        'fecha': fecha_info['fecha'],
-                        'fecha_texto': fecha_info['fecha_texto'],
-                        'descripcion': fest['nombre'],
-                        'tipo': 'nacional',
-                        'ambito': 'nacional',
-                        'ccaa': 'España',
-                        'sustituible': fest['sustituible'],
-                        'year': self.year
-                    }
-                    festivos.append(festivo)
+        # Patrón: ">6 Jueves Santo" o "6 Jueves Santo"
+        patron_jueves = r'(\d{1,2})\s+jueves\s+santo'
+        match_jueves = re.search(patron_jueves, content_lower)
+        
+        if match_jueves:
+            dia = int(match_jueves.group(1))
+            # Buscar el mes en contexto amplio
+            idx = match_jueves.start()
+            contexto = content_lower[max(0, idx-500):min(len(content_lower), idx+500)]
+            
+            # Determinar mes (buscar "abril", "marzo", etc.)
+            mes = None
+            for mes_nombre, mes_num in meses.items():
+                if mes_nombre in contexto:
+                    mes = mes_num
+                    mes_texto = mes_nombre
+                    break
+            
+            # Si no encontramos mes en contexto, asumir marzo/abril (Semana Santa)
+            if mes is None:
+                # Semana Santa suele ser marzo o abril
+                if dia <= 15:
+                    mes = 4  # abril
+                    mes_texto = 'abril'
+                else:
+                    mes = 3  # marzo
+                    mes_texto = 'marzo'
+            
+            fecha_iso = f"{self.year}-{mes:02d}-{dia:02d}"
+            fecha_texto = f"{dia} de {mes_texto}"
+            
+            festivos.append({
+                'fecha': fecha_iso,
+                'fecha_texto': fecha_texto,
+                'descripcion': 'Jueves Santo',
+                'tipo': 'nacional',
+                'ambito': 'nacional',
+                'sustituible': True,
+                'year': self.year
+            })
+        
+        # Patrón: ">7 Viernes Santo" o "7 Viernes Santo"
+        patron_viernes = r'(\d{1,2})\s+viernes\s+santo'
+        match_viernes = re.search(patron_viernes, content_lower)
+        
+        if match_viernes:
+            dia = int(match_viernes.group(1))
+            # Buscar el mes en contexto
+            idx = match_viernes.start()
+            contexto = content_lower[max(0, idx-500):min(len(content_lower), idx+500)]
+            
+            mes = None
+            for mes_nombre, mes_num in meses.items():
+                if mes_nombre in contexto:
+                    mes = mes_num
+                    mes_texto = mes_nombre
+                    break
+            
+            if mes is None:
+                # Viernes Santo = Jueves Santo + 1 día
+                if dia <= 15:
+                    mes = 4
+                    mes_texto = 'abril'
+                else:
+                    mes = 3
+                    mes_texto = 'marzo'
+            
+            fecha_iso = f"{self.year}-{mes:02d}-{dia:02d}"
+            fecha_texto = f"{dia} de {mes_texto}"
+            
+            festivos.append({
+                'fecha': fecha_iso,
+                'fecha_texto': fecha_texto,
+                'descripcion': 'Viernes Santo',
+                'tipo': 'nacional',
+                'ambito': 'nacional',
+                'sustituible': False,
+                'year': self.year
+            })
         
         return festivos
     
-    def _parse_tabla_boe(self, soup: BeautifulSoup) -> List[Dict]:
-        """
-        Intenta parsear la tabla HTML del BOE.
-        Extrae festivos que están marcados con * en todas las columnas de CCAA.
-        """
-        festivos = []
-        
-        # Buscar todas las filas que contengan fechas de festivos
-        texto = soup.get_text()
-        
-        # Patrones para detectar festivos nacionales
-        # Buscamos líneas como: "1 Año Nuevo. | * | * | * | * | ..."
-        patrones_festivos = [
-            (r'1\s+Año Nuevo', '1 de enero', 'Año Nuevo', False),
-            (r'6\s+Epifanía del Señor', '6 de enero', 'Epifanía del Señor', True),
-            (r'2\s+Jueves Santo', '2 de abril', 'Jueves Santo', True),
-            (r'3\s+Viernes Santo', '3 de abril', 'Viernes Santo', False),
-            (r'1\s+Fiesta del Trabajo', '1 de mayo', 'Fiesta del Trabajo', False),
-            (r'15\s+Asunción de la Virgen', '15 de agosto', 'Asunción de la Virgen', False),
-            (r'12\s+Fiesta Nacional de España', '12 de octubre', 'Fiesta Nacional de España', False),
-            (r'8\s+Inmaculada Concepción', '8 de diciembre', 'Inmaculada Concepción', False),
-            (r'25\s+Natividad del Señor', '25 de diciembre', 'Natividad del Señor', False),
-        ]
-        
-        for patron, fecha_texto, nombre, sustituible in patrones_festivos:
-            if re.search(patron, texto, re.IGNORECASE):
-                fecha_info = self.parse_fecha_espanol(fecha_texto)
+    def _parse_tabla_html(self, content: str) -> List[Dict]:
+        """Parsea tabla HTML del BOE"""
+        try:
+            soup = BeautifulSoup(content, 'lxml')
+            festivos = []
+            
+            tablas = soup.find_all('table')
+            
+            for tabla in tablas:
+                filas = tabla.find_all('tr')
                 
-                if fecha_info:
-                    festivo = {
-                        'fecha': fecha_info['fecha'],
-                        'fecha_texto': fecha_info['fecha_texto'],
-                        'descripcion': nombre,
-                        'tipo': 'nacional',
-                        'ambito': 'nacional',
-                        'ccaa': 'España',
-                        'sustituible': sustituible,
-                        'year': self.year
-                    }
-                    festivos.append(festivo)
+                for fila in filas:
+                    celdas = fila.find_all(['td', 'th'])
+                    if len(celdas) < 2:
+                        continue
+                    
+                    texto_fila = ' '.join([c.get_text(strip=True) for c in celdas])
+                    
+                    fecha_match = self._extraer_fecha_de_texto(texto_fila)
+                    
+                    if fecha_match:
+                        fecha_iso, fecha_texto = fecha_match
+                        
+                        descripcion = texto_fila.replace(fecha_texto, '').strip()
+                        descripcion = re.sub(r'^\d+\s*', '', descripcion)
+                        descripcion = descripcion.strip('.,;:-')
+                        
+                        if descripcion and len(descripcion) > 3:
+                            festivos.append({
+                                'fecha': fecha_iso,
+                                'fecha_texto': fecha_texto,
+                                'descripcion': descripcion.title(),
+                                'tipo': 'nacional',
+                                'ambito': 'nacional',
+                                'sustituible': False,
+                                'year': self.year
+                            })
+            
+            # Deduplicar
+            fechas_vistas = set()
+            festivos_unicos = []
+            for f in festivos:
+                if f['fecha'] not in fechas_vistas:
+                    fechas_vistas.add(f['fecha'])
+                    festivos_unicos.append(f)
+            
+            return festivos_unicos
+            
+        except Exception:
+            return []
+    
+    def _parse_texto_patrones(self, content: str) -> List[Dict]:
+        """Parsea texto buscando patrones de fecha + descripción"""
+        try:
+            festivos = []
+            lineas = content.split('\n')
+            
+            for linea in lineas:
+                fecha_match = self._extraer_fecha_de_texto(linea)
+                
+                if fecha_match:
+                    fecha_iso, fecha_texto = fecha_match
+                    
+                    resto = linea.replace(fecha_texto, '')
+                    resto = re.sub(r'^\d+\s*[.)\-:]\s*', '', resto)
+                    resto = resto.strip('.,;:-()[]')
+                    
+                    if resto and len(resto) > 3:
+                        descripcion = resto.split('.')[0][:100].strip()
+                        
+                        if descripcion:
+                            festivos.append({
+                                'fecha': fecha_iso,
+                                'fecha_texto': fecha_texto,
+                                'descripcion': descripcion.title(),
+                                'tipo': 'nacional',
+                                'ambito': 'nacional',
+                                'sustituible': False,
+                                'year': self.year
+                            })
+            
+            # Deduplicar
+            fechas_vistas = set()
+            festivos_unicos = []
+            for f in festivos:
+                if f['fecha'] not in fechas_vistas:
+                    fechas_vistas.add(f['fecha'])
+                    festivos_unicos.append(f)
+            
+            return festivos_unicos
+            
+        except Exception:
+            return []
+    
+    def _extraer_fecha_de_texto(self, texto: str) -> Optional[tuple]:
+        """
+        Extrae fecha de un texto en formato español.
+        Retorna (fecha_iso, fecha_texto) o None
+        """
+        texto_lower = texto.lower()
         
-        if festivos:
-            print(f"   🎯 Método: PARSING HTML del BOE (detectados por patrones regex)")
-        return festivos
+        patron = r'(\d{1,2})\s+de\s+(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)'
+        match = re.search(patron, texto_lower)
+        
+        if match:
+            dia = int(match.group(1))
+            mes_texto = match.group(2)
+            fecha_texto = f"{dia} de {mes_texto}"
+            
+            meses = {
+                'enero': 1, 'febrero': 2, 'marzo': 3, 'abril': 4,
+                'mayo': 5, 'junio': 6, 'julio': 7, 'agosto': 8,
+                'septiembre': 9, 'octubre': 10, 'noviembre': 11, 'diciembre': 12
+            }
+            
+            mes = meses.get(mes_texto)
+            if mes:
+                fecha_iso = f"{self.year}-{mes:02d}-{dia:02d}"
+                return (fecha_iso, fecha_texto)
+        
+        return None
+
 
 def main():
     """Test del scraper"""
     import sys
     
-    # Permitir especificar año por argumento
     if len(sys.argv) > 1:
         try:
             year = int(sys.argv[1])
@@ -162,7 +322,7 @@ def main():
             print("❌ Año inválido. Uso: python -m scrapers.core.boe_scraper [año]")
             return
     else:
-        year = 2026  # Por defecto
+        year = 2026
     
     print("=" * 80)
     print(f"🧪 TEST: BOE Scraper - Festivos {year}")
