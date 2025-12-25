@@ -1,12 +1,14 @@
 """
 BOE Scraper - Festivos nacionales de España
 Extrae festivos desde el Boletín Oficial del Estado parseando la tabla HTML
+Usa BOEAutoDiscovery para encontrar URLs automáticamente
 """
 
 from typing import List, Dict
 from bs4 import BeautifulSoup
 import re
 from .base_scraper import BaseScraper
+from scrapers.discovery.boe_discovery import BOEAutoDiscovery
 
 
 class BOEScraper(BaseScraper):
@@ -17,20 +19,17 @@ class BOEScraper(BaseScraper):
     
     def __init__(self, year: int):
         super().__init__(year=year, ccaa='nacional', tipo='nacionales')
-        
-        # URLs conocidas del BOE
-        self.boe_urls = {
-            2026: "https://www.boe.es/diario_boe/txt.php?id=BOE-A-2025-21667",
-            2025: "https://www.boe.es/diario_boe/txt.php?id=BOE-A-2024-XXXXX",
-        }
+        self.discovery = BOEAutoDiscovery()
     
     def get_source_url(self) -> str:
-        """Devuelve URL del BOE para el año solicitado"""
-        url = self.boe_urls.get(self.year, "")
-        if not url:
-            print(f"⚠️  URL del BOE no configurada para {self.year}")
-        return url
-    
+        """Devuelve URL del BOE usando discovery automático"""
+        try:
+            # Intentar auto-discovery (usa KNOWN_URLS primero, luego API si es necesario)
+            return self.discovery.get_url(self.year, try_auto_discovery=True)
+        except ValueError as e:
+            print(f"❌ Error: {e}")
+            return ""
+        
     def parse_festivos(self, content: str) -> List[Dict]:
         """
         Parsea la tabla HTML del BOE y extrae festivos nacionales.
