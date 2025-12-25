@@ -7,19 +7,59 @@ from typing import List, Dict
 import re
 from bs4 import BeautifulSoup
 from scrapers.core.base_scraper import BaseScraper
+import json
+import os
+import html
 
 
 class CanariasAutonomicosScraper(BaseScraper):
-    """
-    Scraper para festivos autonómicos e insulares de Canarias
-    Extrae desde el Decreto publicado en el BOC
-    """
+    """Scraper para festivos autonómicos de Canarias"""
+    
+    # URLs conocidas (añadir más según se descubran)
+    KNOWN_URLS = {
+        2025: "https://www.gobiernodecanarias.org/boc/2024/187/3013.html",
+    }
+    
+    CACHE_FILE = "config/canarias_urls_cache.json"
     
     def __init__(self, year: int):
         super().__init__(year=year, ccaa='canarias', tipo='autonomicos')
-        
-        # Mapping de municipios a islas (heredado de config si es necesario)
-        self.municipios_islas = self._load_municipios_islas()
+        self._load_cache()
+
+    def _load_cache(self):
+        """Carga URLs del cache"""
+        if os.path.exists(self.CACHE_FILE):
+            try:
+                with open(self.CACHE_FILE, 'r', encoding='utf-8') as f:
+                    cache = json.load(f)
+                    self.cached_urls = cache.get('autonomicos', {})
+                print(f"📦 Cache cargado: {len(self.cached_urls)} URLs autonómicas")
+            except:
+                self.cached_urls = {}
+        else:
+            self.cached_urls = {}
+    
+    def _save_to_cache(self, year: int, url: str):
+        """Guarda URL en el cache"""
+        try:
+            # Cargar cache completo
+            if os.path.exists(self.CACHE_FILE):
+                with open(self.CACHE_FILE, 'r', encoding='utf-8') as f:
+                    cache = json.load(f)
+            else:
+                cache = {"autonomicos": {}, "locales": {}}
+            
+            # Actualizar
+            cache['autonomicos'][str(year)] = url
+            
+            # Guardar
+            with open(self.CACHE_FILE, 'w', encoding='utf-8') as f:
+                json.dump(cache, f, ensure_ascii=False, indent=2)
+            
+            print(f"💾 URL guardada en cache: {year} → {url}")
+            
+        except Exception as e:
+            print(f"⚠️  No se pudo guardar en cache: {e}")
     
     def _load_municipios_islas(self) -> Dict[str, List[str]]:
         """Carga mapping de municipios a islas desde configuración o hardcoded"""
@@ -67,17 +107,27 @@ class CanariasAutonomicosScraper(BaseScraper):
         }
     
     def get_source_url(self) -> str:
-        """Obtiene URL del Decreto desde configuración"""
-        publicaciones = self.config.get('publicaciones', {})
-        year_config = publicaciones.get(str(self.year), {})
-        autonomicos_config = year_config.get('autonomicos', {})
+        """Devuelve URL del BOC (con sistema de cache)"""
+        year_str = str(self.year)
         
-        url = autonomicos_config.get('url', '')
+        # 1. KNOWN_URLS (oficial)
+        if self.year in self.KNOWN_URLS:
+            url = self.KNOWN_URLS[self.year]
+            print(f"✅ URL oficial (KNOWN_URLS) para {self.year}")
+            return url
         
-        if not url:
-            print(f"⚠️  URL no configurada para {self.ccaa} {self.year}")
+        # 2. Cache
+        if year_str in self.cached_urls:
+            url = self.cached_urls[year_str]
+            print(f"📦 URL en cache para {self.year}: {url}")
+            return url
         
-        return url
+        # 3. Si no existe, dar instrucciones
+        raise ValueError(
+            f"\n❌ No se encontró URL para {self.year}.\n\n"
+            f"Busca manualmente en https://www.gobiernodecanarias.org/boc/\n"
+            f"y añade la URL al archivo {self.CACHE_FILE}\n"
+        )
     
     def get_isla_municipio(self, municipio: str) -> str:
         """Devuelve la isla a la que pertenece un municipio"""
@@ -90,127 +140,83 @@ class CanariasAutonomicosScraper(BaseScraper):
         """
         Parsea el Decreto del BOC y extrae festivos autonómicos e insulares
         """
+        # Decodificar HTML entities
+        content = html.unescape(content)
+        
         soup = BeautifulSoup(content, 'lxml')
         festivos = []
         
-        # Extraer texto
+        # Extraer texto completo
         texto = soup.get_text()
         
-        # Buscar el ANEXO
-        anexo_pos = texto.find("ANEXO")
-        if anexo_pos == -1:
-            print("❌ No se encontró ANEXO en el Decreto")
-            return []
+        # NORMALIZAR: eliminar \xa0, Â y otros caracteres raros
+        texto = texto.replace('\xa0', ' ')  # Espacio no-rompible
+        texto = texto.replace('Â', '')      # Caracter extraño
+        texto = re.sub(r'\s+', ' ', texto)  # Múltiples espacios → uno solo
         
-        # Extraer contenido del anexo
-        contenido_anexo = texto[anexo_pos:]
-        lineas = contenido_anexo.split('\n')
+        print(f"   🔍 Buscando festivos en texto normalizado...")
         
-        festivos_canarias = []
-        festivos_insulares = {}
-        isla_actual = None
-        modo = 'canarias'
-        
-        for linea in lineas:
-            linea = linea.strip()
-            
-            if not linea:
-                continue
-            
-            # Detectar cambio a festivos insulares
-            if 'En las islas de' in linea or 'las fiestas laborales serán' in linea:
-                modo = 'insulares'
-                continue
-            
-            # Detectar isla específica
-            isla_match = re.match(r'^[-–]\s*En\s+(.+?):\s*(.+)', linea, re.IGNORECASE)
-            if isla_match:
-                isla_actual = isla_match.group(1).strip()
-                resto_linea = isla_match.group(2)
-                
-                # Normalizar nombre de isla
-                isla_actual = self._normalizar_isla(isla_actual)
-                
-                # Intentar extraer el festivo de la misma línea
-                fecha_info = self.parse_fecha_espanol(resto_linea)
-                if fecha_info:
-                    match_desc = re.search(r'festividad\s+de\s+(.+?)\.?$', resto_linea, re.IGNORECASE)
-                    if match_desc:
-                        descripcion = match_desc.group(1).strip()
-                        festivos_insulares[isla_actual] = {
-                            'fecha': fecha_info['fecha'],
-                            'fecha_texto': fecha_info['fecha_texto'],
-                            'descripcion': f"Festividad de {descripcion}"
-                        }
-                
-                continue
-            
-            # Detectar festivos (formato: "- día de mes, Nombre.")
-            if linea.startswith('-') or linea.startswith('•'):
-                fecha_info = self.parse_fecha_espanol(linea)
-                
-                if fecha_info:
-                    partes = linea.split(',', 1)
-                    if len(partes) > 1:
-                        descripcion = partes[1].strip().rstrip('.')
-                        
-                        if modo == 'canarias':
-                            festivos_canarias.append({
-                                'fecha': fecha_info['fecha'],
-                                'fecha_texto': fecha_info['fecha_texto'],
-                                'descripcion': descripcion
-                            })
-        
-        # Construir lista estructurada
-        # IMPORTANTE: Filtrar festivos nacionales que ya vienen del BOE
-        # Solo queremos festivos ESPECÍFICOS de Canarias (Día de Canarias + insulares)
-        
-        festivos_nacionales_conocidos = [
-            'año nuevo', 'epifanía', 'jueves santo', 'viernes santo',
-            'fiesta del trabajo', 'asunción', 'fiesta nacional de españa',
-            'todos los santos', 'constitución', 'inmaculada', 'natividad'
-        ]
-        
-        # 1. Festivos de toda Canarias (solo los específicos, no nacionales)
-        for fest in festivos_canarias:
-            descripcion_lower = fest['descripcion'].lower()
-            
-            # Filtrar si es nacional
-            es_nacional = any(
-                festivo_nacional in descripcion_lower 
-                for festivo_nacional in festivos_nacionales_conocidos
-            )
-            
-            if not es_nacional:
-                festivo = {
-                    'fecha': fest['fecha'],
-                    'fecha_texto': fest['fecha_texto'],
-                    'descripcion': fest['descripcion'],
-                    'tipo': 'autonomico',
-                    'ambito': 'autonomico',
-                    'ccaa': 'Canarias',
-                    'islas': 'Todas',
-                    'municipios_aplicables': 'Todos',
-                    'year': self.year
-                }
-                festivos.append(festivo)
-        
-        # 2. Festivos insulares (estos siempre son autonómicos)
-        for isla, datos in festivos_insulares.items():
-            islas_aplicables = isla.split('/') if '/' in isla else [isla]
-            
-            festivo = {
-                'fecha': datos['fecha'],
-                'fecha_texto': datos['fecha_texto'],
-                'descripcion': datos['descripcion'],
+        # 1. Buscar Día de Canarias (30 de mayo)
+        if '30 de mayo' in texto.lower() or '30 mayo' in texto.lower():
+            print(f"   ✅ Encontrado Día de Canarias")
+            festivos.append({
+                'fecha': f'{self.year}-05-30',
+                'fecha_texto': '30 de mayo',
+                'descripcion': 'Día de Canarias',
                 'tipo': 'autonomico',
-                'ambito': 'insular',
+                'ambito': 'autonomico',
                 'ccaa': 'Canarias',
-                'islas': isla,
-                'municipios_aplicables': islas_aplicables,
+                'islas': 'Todas',
+                'municipios_aplicables': 'Todos',
                 'year': self.year
-            }
-            festivos.append(festivo)
+            })
+        
+        # 2. Buscar festivos insulares
+        # Patrón flexible para manejar variaciones
+        patron_insular = r'En\s+([^:]+?):\s+el\s+(\d{1,2})\s+de\s+(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre),\s+festividad\s+de\s+(.+?)(?:\.|(?=\s+En\s+)|$)'
+        
+        matches = list(re.finditer(patron_insular, texto, re.IGNORECASE | re.DOTALL))
+        print(f"   🔍 Matches insulares encontrados: {len(matches)}")
+        
+        meses = {
+            'enero': 1, 'febrero': 2, 'marzo': 3, 'abril': 4,
+            'mayo': 5, 'junio': 6, 'julio': 7, 'agosto': 8,
+            'septiembre': 9, 'octubre': 10, 'noviembre': 11, 'diciembre': 12
+        }
+        
+        for match in matches:
+            isla = match.group(1).strip()
+            dia = int(match.group(2))
+            mes_texto = match.group(3).lower()
+            descripcion_virgen = match.group(4).strip()
+            
+            # Limpiar descripción
+            descripcion_virgen = descripcion_virgen.split('\n')[0].strip()
+            
+            print(f"   ✅ {isla}: {dia} de {mes_texto} - {descripcion_virgen}")
+            
+            # Normalizar isla
+            isla_normalizada = self._normalizar_isla(isla)
+            
+            mes = meses.get(mes_texto)
+            if mes:
+                fecha_iso = f"{self.year}-{mes:02d}-{dia:02d}"
+                fecha_texto_completo = f"{dia} de {mes_texto}"
+                
+                festivos.append({
+                    'fecha': fecha_iso,
+                    'fecha_texto': fecha_texto_completo,
+                    'descripcion': f'Festividad de {descripcion_virgen}',
+                    'tipo': 'autonomico',
+                    'ambito': 'insular',
+                    'ccaa': 'Canarias',
+                    'islas': isla_normalizada,
+                    'municipios_aplicables': [isla_normalizada] if '/' not in isla_normalizada else isla_normalizada.split('/'),
+                    'year': self.year
+                })
+        
+        if festivos:
+            print(f"   ✅ Total festivos extraídos: {len(festivos)}")
         
         return festivos
     
@@ -232,13 +238,35 @@ class CanariasAutonomicosScraper(BaseScraper):
             return 'Fuerteventura'
         return isla
 
-
-if __name__ == "__main__":
-    # Test del scraper
-    scraper = CanariasAutonomicosScraper(year=2026)
+def main():
+    """Test del scraper"""
+    import sys
+    
+    if len(sys.argv) > 1:
+        try:
+            year = int(sys.argv[1])
+        except ValueError:
+            print("❌ Año inválido. Uso: python -m scrapers.ccaa.canarias.autonomicos [año]")
+            return
+    else:
+        year = 2025  # Por defecto
+    
+    print("=" * 80)
+    print(f"🧪 TEST: Canarias Autonómicos Scraper - Festivos {year}")
+    print("=" * 80)
+    
+    scraper = CanariasAutonomicosScraper(year=year)
     festivos = scraper.scrape()
     
     if festivos:
         scraper.print_summary()
-        scraper.save_to_json('data/canarias_autonomicos_2026.json')
-        scraper.save_to_excel('data/canarias_autonomicos_2026.xlsx')
+        scraper.save_to_json(f'data/canarias_autonomicos_{year}.json')
+        scraper.save_to_excel(f'data/canarias_autonomicos_{year}.xlsx')
+        
+        print(f"\n✅ Test completado para {year}")
+    else:
+        print(f"\n❌ No se pudieron extraer festivos para {year}")
+
+
+if __name__ == "__main__":
+    main()

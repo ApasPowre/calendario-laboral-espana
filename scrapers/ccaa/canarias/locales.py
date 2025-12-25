@@ -7,6 +7,8 @@ from typing import List, Dict
 import re
 from bs4 import BeautifulSoup
 from scrapers.core.base_scraper import BaseScraper
+import json
+import os
 
 
 class CanariasLocalesScraper(BaseScraper):
@@ -14,22 +16,75 @@ class CanariasLocalesScraper(BaseScraper):
     Scraper para festivos locales de Canarias
     Extrae desde la Orden publicada en el BOC (2 festivos por municipio)
     """
-    
-    def __init__(self, year: int):
+
+    CACHE_FILE = "config/canarias_urls_cache.json"
+
+    KNOWN_URLS = {
+        2025: "https://www.gobiernodecanarias.org/boc/2024/238/3948.html",
+    }
+
+    def __init__(self, year: int, municipio: str = None):
         super().__init__(year=year, ccaa='canarias', tipo='locales')
+        self.municipio = municipio
+        self._load_cache()
+    
+    def _load_cache(self):
+        """Carga URLs del cache"""
+        if os.path.exists(self.CACHE_FILE):
+            try:
+                with open(self.CACHE_FILE, 'r', encoding='utf-8') as f:
+                    cache = json.load(f)
+                    self.cached_urls = cache.get('locales', {})
+                print(f"📦 Cache cargado: {len(self.cached_urls)} URLs locales")
+            except:
+                self.cached_urls = {}
+        else:
+            self.cached_urls = {}
+    
+    def _save_to_cache(self, year: int, url: str):
+        """Guarda URL en el cache"""
+        try:
+            # Cargar cache completo
+            if os.path.exists(self.CACHE_FILE):
+                with open(self.CACHE_FILE, 'r', encoding='utf-8') as f:
+                    cache = json.load(f)
+            else:
+                cache = {"autonomicos": {}, "locales": {}}
+            
+            # Actualizar
+            cache['locales'][str(year)] = url
+            
+            # Guardar
+            with open(self.CACHE_FILE, 'w', encoding='utf-8') as f:
+                json.dump(cache, f, ensure_ascii=False, indent=2)
+            
+            print(f"💾 URL guardada en cache: {year} → {url}")
+            
+        except Exception as e:
+            print(f"⚠️  No se pudo guardar en cache: {e}")
     
     def get_source_url(self) -> str:
-        """Obtiene URL de la Orden desde configuración"""
-        publicaciones = self.config.get('publicaciones', {})
-        year_config = publicaciones.get(str(self.year), {})
-        locales_config = year_config.get('locales', {})
+        """Devuelve URL del BOC (con sistema de cache)"""
+        year_str = str(self.year)
         
-        url = locales_config.get('url', '')
+        # 1. KNOWN_URLS (oficial)
+        if self.year in self.KNOWN_URLS:
+            url = self.KNOWN_URLS[self.year]
+            print(f"✅ URL oficial (KNOWN_URLS) para {self.year}")
+            return url
         
-        if not url:
-            print(f"⚠️  URL no configurada para {self.ccaa} {self.year}")
+        # 2. Cache
+        if year_str in self.cached_urls:
+            url = self.cached_urls[year_str]
+            print(f"📦 URL en cache para {self.year}: {url}")
+            return url
         
-        return url
+        # 3. Si no existe, dar instrucciones
+        raise ValueError(
+            f"\n❌ No se encontró URL para {self.year}.\n\n"
+            f"Busca manualmente en https://www.gobiernodecanarias.org/boc/\n"
+            f"y añade la URL al archivo {self.CACHE_FILE}\n"
+        )
     
     def parse_festivos(self, content: str) -> List[Dict]:
         """
@@ -39,8 +94,17 @@ class CanariasLocalesScraper(BaseScraper):
         soup = BeautifulSoup(content, 'lxml')
         festivos = []
         
-        # Extraer texto
+        # Extraer texto y normalizar encoding
+        import html as html_lib
+        import unicodedata
+        
+        content = html_lib.unescape(content)
+        soup = BeautifulSoup(content, 'lxml')
         texto = soup.get_text()
+        
+        # Normalizar Unicode: eliminar caracteres de control y normalizar
+        texto = ''.join(char for char in texto if unicodedata.category(char)[0] != 'C' or char in '\n\r\t')
+        
         lineas = texto.split('\n')
         
         municipio_actual = None
@@ -52,12 +116,14 @@ class CanariasLocalesScraper(BaseScraper):
             if not linea:
                 continue
             
-            # Detectar municipio (mayúsculas + punto)
-            if re.match(r'^[A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ\s]+\.$', linea):
-                # Guardar festivos del municipio anterior
+            # Detectar municipio: empieza con mayúscula, solo letras/espacios, termina en punto
+            if linea and linea[-1] == '.' and linea[:-1].replace(' ', '').isalpha() and linea[0].isupper():
+                # Guardar festivos del municipio anterior (con filtro)
                 if municipio_actual and festivos_municipio:
-                    for fest in festivos_municipio:
-                        festivos.append(fest)
+                    # Aplicar filtro de municipio si existe
+                    if self.municipio is None or self._normalizar_municipio(municipio_actual) == self._normalizar_municipio(self.municipio):
+                        for fest in festivos_municipio:
+                            festivos.append(fest)
                 
                 # Nuevo municipio
                 municipio_actual = linea.rstrip('.').strip()
@@ -97,12 +163,27 @@ class CanariasLocalesScraper(BaseScraper):
                             }
                             festivos_municipio.append(festivo)
         
-        # Guardar festivos del último municipio
+        # Guardar festivos del último municipio (con filtro)
         if municipio_actual and festivos_municipio:
-            for fest in festivos_municipio:
-                festivos.append(fest)
+            if self.municipio is None or self._normalizar_municipio(municipio_actual) == self._normalizar_municipio(self.municipio):
+                for fest in festivos_municipio:
+                    festivos.append(fest)
         
         return festivos
+    
+    def _normalizar_municipio(self, municipio: str) -> str:
+        """Normaliza nombre de municipio para comparación exacta"""
+        import unicodedata
+        # Quitar acentos
+        municipio = ''.join(
+            c for c in unicodedata.normalize('NFD', municipio)
+            if unicodedata.category(c) != 'Mn'
+        )
+        # Lowercase, sin espacios extra, sin puntos
+        municipio = municipio.lower().strip().rstrip('.')
+        # Normalizar espacios múltiples
+        municipio = ' '.join(municipio.split())
+        return municipio
     
     def _detectar_provincia(self, municipio: str) -> str:
         """
@@ -127,12 +208,58 @@ class CanariasLocalesScraper(BaseScraper):
             return 'Santa Cruz de Tenerife'
 
 
-if __name__ == "__main__":
-    # Test del scraper
-    scraper = CanariasLocalesScraper(year=2026)
+def main():
+    """Test del scraper"""
+    import sys
+    
+    year = 2025
+    municipio = None
+    
+    # Argumentos: python -m scrapers.ccaa.canarias.locales [municipio] [año]
+    # O: python -m scrapers.ccaa.canarias.locales [año] [municipio]
+    
+    if len(sys.argv) > 1:
+        # Primer argumento
+        try:
+            year = int(sys.argv[1])
+        except ValueError:
+            # No es un año, es un municipio
+            municipio = sys.argv[1]
+    
+    if len(sys.argv) > 2:
+        # Segundo argumento
+        try:
+            year = int(sys.argv[2])
+        except ValueError:
+            # No es un año, es un municipio
+            if municipio is None:
+                municipio = sys.argv[2]
+    
+    print("=" * 80)
+    if municipio:
+        print(f"🧪 TEST: Canarias Locales - {municipio} {year}")
+    else:
+        print(f"🧪 TEST: Canarias Locales - Todos los municipios {year}")
+    print("=" * 80)
+    
+    scraper = CanariasLocalesScraper(year=year, municipio=municipio)
     festivos = scraper.scrape()
     
     if festivos:
         scraper.print_summary()
-        scraper.save_to_json('data/canarias_locales_2026.json')
-        scraper.save_to_excel('data/canarias_locales_2026.xlsx')
+        
+        if municipio:
+            filename = f"data/canarias_{municipio.lower().replace(' ', '_')}_{year}"
+        else:
+            filename = f"data/canarias_locales_{year}"
+        
+        scraper.save_to_json(f"{filename}.json")
+        scraper.save_to_excel(f"{filename}.xlsx")
+        
+        print(f"\n✅ Test completado para {year}")
+    else:
+        print(f"\n❌ No se pudieron extraer festivos para {year}")
+
+
+if __name__ == "__main__":
+    main()

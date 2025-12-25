@@ -20,24 +20,77 @@ class MadridAutonomicosScraper(BaseScraper):
     KNOWN_URLS = {
         2026: "https://www.bocm.es/boletin/CM_Orden_BOCM/2025/09/25/BOCM-20250925-16.PDF",
     }
+    CACHE_FILE = "config/madrid_urls_cache.json"
     
     def __init__(self, year: int):
         super().__init__(year=year, ccaa='madrid', tipo='autonomicos')
+        self._load_cache()
     
+    def _load_cache(self):
+        """Carga URLs del cache"""
+        import os
+        import json
+        
+        if os.path.exists(self.CACHE_FILE):
+            try:
+                with open(self.CACHE_FILE, 'r', encoding='utf-8') as f:
+                    cache = json.load(f)
+                    self.cached_urls = cache.get('autonomicos', {})
+                print(f"📦 Cache cargado: {len(self.cached_urls)} URLs autonómicas")
+            except:
+                self.cached_urls = {}
+        else:
+            self.cached_urls = {}
+    
+    def _save_to_cache(self, year: int, url: str):
+        """Guarda URL en el cache"""
+        import os
+        import json
+        
+        try:
+            # Cargar cache completo
+            if os.path.exists(self.CACHE_FILE):
+                with open(self.CACHE_FILE, 'r', encoding='utf-8') as f:
+                    cache = json.load(f)
+            else:
+                cache = {"autonomicos": {}, "locales": {}}
+            
+            # Actualizar
+            cache['autonomicos'][str(year)] = url
+            
+            # Guardar
+            with open(self.CACHE_FILE, 'w', encoding='utf-8') as f:
+                json.dump(cache, f, ensure_ascii=False, indent=2)
+            
+            print(f"💾 URL guardada en cache: {year} → {url}")
+            
+        except Exception as e:
+            print(f"⚠️  No se pudo guardar en cache: {e}")
+
     def get_source_url(self) -> str:
-        """Devuelve URL del BOCM"""
+        """Devuelve URL del BOCM (con sistema de cache)"""
+        year_str = str(self.year)
+        
+        # 1. KNOWN_URLS (oficial)
         if self.year in self.KNOWN_URLS:
             url = self.KNOWN_URLS[self.year]
-            print(f"✅ URL conocida para {self.year}: {url}")
+            print(f"✅ URL oficial (KNOWN_URLS) para {self.year}: {url}")
             return url
         
+        # 2. Cache
+        if year_str in self.cached_urls:
+            url = self.cached_urls[year_str]
+            print(f"📦 URL en cache para {self.year}: {url}")
+            return url
+        
+        # 3. Si no existe, dar instrucciones
         raise ValueError(
             f"\n❌ No se encontró URL para {self.year}.\n\n"
-            f"Busca manualmente:\n"
-            f"1. Ve a https://www.bocm.es\n"
-            f"2. Busca 'fiestas laborales {self.year}'\n"
-            f"3. Encuentra el Decreto (publicado en sept {self.year-1})\n"
-            f"4. Añade la URL a KNOWN_URLS en madrid/autonomicos.py\n"
+            f"Para añadirla:\n"
+            f"1. Busca en https://www.bocm.es 'fiestas laborales {self.year}'\n"
+            f"2. Encuentra el Decreto (publicado en sept {self.year-1})\n"
+            f"3. Ejecuta este scraper pasando la URL:\n"
+            f"   python -m scrapers.ccaa.madrid.autonomicos {self.year} --url=URL_AQUI\n"
         )
     
     def parse_festivos(self, content: str) -> List[Dict]:
