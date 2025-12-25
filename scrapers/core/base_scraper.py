@@ -314,27 +314,43 @@ class BaseScraper(ABC):
         
         return festivos
     
-    def fetch_content(self, url: str, encoding: str = 'utf-8') -> Optional[str]:
-        """
-        Descarga contenido desde una URL.
-        
-        Args:
-            url: URL a descargar
-            encoding: Codificación del contenido (default: utf-8)
-            
-        Returns:
-            Contenido como string o None si falla
-        """
+    def fetch_content(self, url: str) -> str:
+        """Descarga el contenido desde una URL (soporta PDFs)"""
         try:
             print(f"📥 Descargando: {url}")
             response = requests.get(url, timeout=30)
             response.raise_for_status()
-            response.encoding = encoding
-            print(f"✅ Descarga completada ({len(response.text)} caracteres)")
-            return response.text
-        except requests.RequestException as e:
-            print(f"❌ Error al descargar: {e}")
-            return None
+            
+            # Verificar si es un PDF
+            content_type = response.headers.get('Content-Type', '').lower()
+            is_pdf = 'application/pdf' in content_type or url.lower().endswith('.pdf')
+            
+            if is_pdf:
+                # Extraer texto del PDF usando pdfplumber
+                import pdfplumber
+                import io
+                
+                pdf_file = io.BytesIO(response.content)
+                text_content = []
+                
+                with pdfplumber.open(pdf_file) as pdf:
+                    for page in pdf.pages:
+                        text = page.extract_text()
+                        if text:
+                            text_content.append(text)
+                
+                content = '\n'.join(text_content)
+                print(f"✅ PDF extraído ({len(content)} caracteres)")
+            else:
+                # Contenido HTML/texto normal
+                content = response.text
+                print(f"✅ Descarga completada ({len(content)} caracteres)")
+            
+            return content
+            
+        except Exception as e:
+            print(f"❌ Error descargando {url}: {e}")
+            return ""
     
     def parse_fecha_espanol(self, texto: str) -> Optional[Dict[str, str]]:
         """
