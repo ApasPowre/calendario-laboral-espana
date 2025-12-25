@@ -17,8 +17,16 @@ class BOEScraper(BaseScraper):
     Parsea la Resolución de fiestas laborales con múltiples estrategias
     """
     
-    def __init__(self, year: int):
-        super().__init__(year=year, ccaa='nacional', tipo='nacionales')
+    def __init__(self, year: int, ccaa: Optional[str] = None, municipio: Optional[str] = None):
+        """
+        Args:
+            year: Año del calendario
+            ccaa: Comunidad autónoma para filtrar (None = solo nacionales)
+            municipio: Municipio para filtrar festivos insulares (Canarias)
+        """
+        super().__init__(year=year, ccaa=ccaa or 'nacional', tipo='nacionales')
+        self.filter_ccaa = ccaa
+        self.filter_municipio = municipio
         self.discovery = BOEAutoDiscovery()
     
     def get_source_url(self) -> str:
@@ -310,6 +318,210 @@ class BOEScraper(BaseScraper):
         
         return None
 
+    def parse_festivos_autonomicos(self, content: str, ccaa: str) -> List[Dict]:
+        """
+        Extrae festivos autonómicos de una CCAA específica del BOE
+        
+        Args:
+            content: Contenido del BOE
+            ccaa: Código de CCAA (madrid, canarias, valencia, etc)
+        
+        Returns:
+            Lista de festivos autonómicos
+        """
+        
+        festivos = []
+        
+        # Mapa de nombres de CCAA en el BOE
+        ccaa_nombres = {
+            'madrid': 'Comunidad de Madrid',
+            'canarias': 'Comunidad Autónoma de Canarias',
+            'valencia': 'Comunitat Valenciana',
+            'cataluna': 'Comunidad Autónoma de Cataluña',
+            'andalucia': 'Comunidad Autónoma de Andalucía',
+            # Añadir más según se necesiten
+        }
+        
+        nombre_ccaa = ccaa_nombres.get(ccaa.lower())
+        if not nombre_ccaa:
+            print(f"   ⚠️  CCAA '{ccaa}' no reconocida para extracción del BOE")
+            return []
+        
+        print(f"   🔍 Extrayendo festivos autonómicos de: {nombre_ccaa}")
+        
+        # Buscar sección de la CCAA en el texto
+        # Formato: "1. En la Comunidad Autónoma de ..., el Decreto ..."
+        
+        # Encontrar inicio de la sección
+        patron_inicio = rf'\d+\.\s*En\s+la\s+{re.escape(nombre_ccaa)}'
+        match_inicio = re.search(patron_inicio, content, re.IGNORECASE)
+        
+        if not match_inicio:
+            print(f"   ❌ No se encontró sección para {nombre_ccaa}")
+            return []
+        
+        # Extraer texto desde el inicio hasta la siguiente CCAA o final
+        inicio = match_inicio.start()
+        
+        # Buscar siguiente CCAA
+        patron_siguiente = r'\d+\.\s*En\s+la\s+Comunidad'
+        siguiente_match = re.search(patron_siguiente, content[inicio+100:], re.IGNORECASE)
+        
+        if siguiente_match:
+            fin = inicio + 100 + siguiente_match.start()
+        else:
+            fin = len(content)
+        
+        texto_ccaa = content[inicio:fin]
+        
+        print(f"   📄 Texto extraído: {len(texto_ccaa)} caracteres")
+        
+        # Extraer festivos específicos de la CCAA
+        # Patrón para fechas como "2 de mayo" o "el 15 de septiembre"
+        patron_fecha = r'(?:el\s+)?(\d{1,2})\s+de\s+(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)'
+        
+        meses = {
+            'enero': 1, 'febrero': 2, 'marzo': 3, 'abril': 4,
+            'mayo': 5, 'junio': 6, 'julio': 7, 'agosto': 8,
+            'septiembre': 9, 'octubre': 10, 'noviembre': 11, 'diciembre': 12
+        }
+        
+        # Para Canarias: buscar festivos insulares
+        if ccaa.lower() == 'canarias':
+            # Patrón específico para islas
+            patron_insular = r'en\s+([^:]+):\s+el\s+(\d{1,2})\s+de\s+(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre),\s+(?:festividad de\s+)?(.+?)(?:;|\.|\n)'
+            
+            matches = re.finditer(patron_insular, texto_ccaa, re.IGNORECASE)
+            
+            for match in matches:
+                isla = match.group(1).strip()
+                dia = int(match.group(2))
+                mes_texto = match.group(3).lower()
+                descripcion = match.group(4).strip()
+                
+                mes = meses.get(mes_texto)
+                if mes:
+                    fecha = f"{self.year}-{mes:02d}-{dia:02d}"
+                    
+                    festivo = {
+                        'fecha': fecha,
+                        'fecha_texto': f"{dia} de {mes_texto}",
+                        'descripcion': f"Festividad de {descripcion}",
+                        'tipo': 'autonomico',
+                        'ambito': 'insular',
+                        'ccaa': 'Canarias',
+                        'isla': isla,
+                        'year': self.year
+                    }
+                    festivos.append(festivo)
+                    print(f"   ✅ {isla}: {dia} de {mes_texto}")
+        
+        # Buscar festivo autonómico general (como Día de Madrid, Día de Canarias, etc)
+        # Estos suelen estar mencionados como "sustituir" o "además"
+        # Para Madrid: buscar "2 de mayo"
+        # Para Canarias: buscar "30 de mayo, Día de Canarias"
+        
+        if ccaa.lower() == 'madrid':
+            # Buscar "2 de mayo"
+            if '2 de mayo' in texto_ccaa.lower():
+                festivos.append({
+                    'fecha': f'{self.year}-05-02',
+                    'fecha_texto': '2 de mayo',
+                    'descripcion': 'Fiesta de la Comunidad de Madrid',
+                    'tipo': 'autonomico',
+                    'ambito': 'autonomico',
+                    'ccaa': 'Madrid',
+                    'year': self.year
+                })
+                print(f"   ✅ 2 de mayo - Fiesta de la Comunidad de Madrid")
+        
+        elif ccaa.lower() == 'canarias':
+            # Buscar "30 de mayo"
+            if '30 de mayo' in texto_ccaa.lower():
+                festivos.append({
+                    'fecha': f'{self.year}-05-30',
+                    'fecha_texto': '30 de mayo',
+                    'descripcion': 'Día de Canarias',
+                    'tipo': 'autonomico',
+                    'ambito': 'autonomico',
+                    'ccaa': 'Canarias',
+                    'year': self.year
+                })
+                print(f"   ✅ 30 de mayo - Día de Canarias")
+        
+        return festivos
+
+    def scrape(self) -> List[Dict]:
+        """
+        Ejecuta el proceso completo de scraping.
+        Sobrescribe el método base para añadir festivos autonómicos.
+        """
+        print(f"\n{'='*80}")
+        print(f"🔍 Iniciando scraping: {self.ccaa.upper()} - {self.tipo.upper()} - {self.year}")
+        print(f"{'='*80}")
+        
+        # 1. Obtener URL
+        url = self.get_source_url()
+        if not url:
+            print("❌ No se pudo obtener URL de la fuente")
+            return []
+        
+        self.metadata['fuente'] = url
+        
+        # 2. Descargar contenido
+        content = self.fetch_content(url)
+        if not content:
+            print("❌ No se pudo descargar el contenido")
+            return []
+        
+        # 3. Parsear festivos NACIONALES
+        festivos = self.parse_festivos(content)
+        
+        # 4. Si se especificó CCAA, añadir festivos AUTONÓMICOS
+        if self.filter_ccaa and self.filter_ccaa.lower() != 'nacional':
+            festivos_auto = self.parse_festivos_autonomicos(content, self.filter_ccaa)
+            
+            # Filtrar festivos insulares por municipio (Canarias)
+            if self.filter_municipio and self.filter_ccaa.lower() == 'canarias':
+                from scrapers.ccaa.canarias.autonomicos import CanariasAutonomicosScraper
+                temp_scraper = CanariasAutonomicosScraper(year=self.year)
+                isla_municipio = temp_scraper.get_isla_municipio(self.filter_municipio.upper())
+                
+                if isla_municipio:
+                    print(f"   🏝️  Filtrando festivos insulares para: {isla_municipio}")
+                    festivos_auto_filtrados = []
+                    
+                    for fest in festivos_auto:
+                        # Mantener festivos de toda Canarias
+                        if fest.get('ambito') == 'autonomico':
+                            festivos_auto_filtrados.append(fest)
+                        # Filtrar insulares
+                        elif fest.get('ambito') == 'insular':
+                            isla_fest = fest.get('isla', '')
+                            if isla_municipio in isla_fest or isla_fest == isla_municipio:
+                                festivos_auto_filtrados.append(fest)
+                    
+                    festivos_auto = festivos_auto_filtrados
+            
+            # Combinar festivos nacionales + autonómicos
+            festivos.extend(festivos_auto)
+        
+        # 5. Validar festivos
+        festivos_validos = []
+        for festivo in festivos:
+            if self.validate_festivo(festivo):
+                festivos_validos.append(festivo)
+        
+        self.festivos = festivos_validos
+        self.metadata['num_festivos'] = len(self.festivos)
+        
+        # 6. Resumen
+        print(f"\n✅ Scraping completado:")
+        print(f"   • Festivos extraídos: {len(self.festivos)}")
+        print(f"   • Fuente: {url}")
+        print(f"{'='*80}\n")
+        
+        return self.festivos
 
 def main():
     """Test del scraper"""
@@ -339,7 +551,6 @@ def main():
         print(f"\n✅ Test completado para {year}")
     else:
         print(f"\n❌ No se pudieron extraer festivos para {year}")
-
 
 if __name__ == "__main__":
     main()

@@ -22,8 +22,10 @@ class CanariasAutonomicosScraper(BaseScraper):
     
     CACHE_FILE = "config/canarias_urls_cache.json"
     
-    def __init__(self, year: int):
+    def __init__(self, year: int, municipio: Optional[str] = None):
         super().__init__(year=year, ccaa='canarias', tipo='autonomicos')
+        self.municipio = municipio
+        self.municipios_islas = self._load_municipios_islas()  # ← Esta línea
         self._load_cache()
 
     def _load_cache(self):
@@ -217,6 +219,30 @@ class CanariasAutonomicosScraper(BaseScraper):
         
         if festivos:
             print(f"   ✅ Total festivos extraídos: {len(festivos)}")
+        
+        # Filtrar festivos insulares si se especificó municipio
+        if self.municipio:
+            isla_municipio = self.get_isla_municipio(self.municipio.upper())
+            
+            if isla_municipio:
+                print(f"   🏝️  Filtrando festivos para isla: {isla_municipio}")
+                festivos_filtrados = []
+                
+                for fest in festivos:
+                    # Mantener festivos de toda Canarias
+                    if fest.get('ambito') == 'autonomico':
+                        festivos_filtrados.append(fest)
+                    # Mantener festivos de la isla del municipio
+                    elif fest.get('ambito') == 'insular':
+                        municipios_aplicables = fest.get('municipios_aplicables', [])
+                        if isinstance(municipios_aplicables, str):
+                            municipios_aplicables = [municipios_aplicables]
+                        
+                        if isla_municipio in municipios_aplicables:
+                            festivos_filtrados.append(fest)
+                
+                festivos = festivos_filtrados
+                print(f"   ✅ Festivos tras filtrar por isla: {len(festivos)}")
         
         return festivos
     
