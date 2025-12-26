@@ -10,7 +10,7 @@ from scrapers.core.base_scraper import BaseScraper
 import json
 import os
 import html
-
+from scrapers.discovery.ccaa.canarias_discovery import auto_discover_canarias
 
 class CanariasAutonomicosScraper(BaseScraper):
     """Scraper para festivos autonómicos de Canarias"""
@@ -30,19 +30,29 @@ class CanariasAutonomicosScraper(BaseScraper):
 
     def _load_cache(self):
         """Carga URLs del cache"""
+        # Inicializar cache vacío por defecto
+        self.cache = {'autonomicos': {}, 'locales': {}}
+        
         if os.path.exists(self.CACHE_FILE):
             try:
                 with open(self.CACHE_FILE, 'r', encoding='utf-8') as f:
-                    cache = json.load(f)
-                    self.cached_urls = cache.get('autonomicos', {})
-                print(f"📦 Cache cargado: {len(self.cached_urls)} URLs autonómicas")
-            except:
-                self.cached_urls = {}
+                    self.cache = json.load(f)
+                print(f"📦 Cache cargado: {len(self.cache.get('autonomicos', {}))} URLs autonómicas")
+            except Exception as e:
+                print(f"⚠️  Error cargando cache: {e}")
+                self.cache = {'autonomicos': {}, 'locales': {}}
         else:
-            self.cached_urls = {}
+            print(f"📦 Cache vacío (archivo no existe)")
     
-    def _save_to_cache(self, year: int, url: str):
-        """Guarda URL en el cache"""
+    def _save_to_cache(self, tipo: str, year: int, url: str):
+        """
+        Guarda URL en el cache
+        
+        Args:
+            tipo: 'autonomicos' o 'locales'
+            year: Año
+            url: URL a guardar
+        """
         try:
             # Cargar cache completo
             if os.path.exists(self.CACHE_FILE):
@@ -51,17 +61,18 @@ class CanariasAutonomicosScraper(BaseScraper):
             else:
                 cache = {"autonomicos": {}, "locales": {}}
             
+            # Asegurar que exista la clave del tipo
+            if tipo not in cache:
+                cache[tipo] = {}
+            
             # Actualizar
-            cache['autonomicos'][str(year)] = url
+            cache[tipo][str(year)] = url
             
             # Guardar
             with open(self.CACHE_FILE, 'w', encoding='utf-8') as f:
                 json.dump(cache, f, ensure_ascii=False, indent=2)
-            
-            print(f"💾 URL guardada en cache: {year} → {url}")
-            
         except Exception as e:
-            print(f"⚠️  No se pudo guardar en cache: {e}")
+            print(f"⚠️  Error guardando en cache: {e}")
     
     def _load_municipios_islas(self) -> Dict[str, List[str]]:
         """Carga mapping de municipios a islas desde configuración o hardcoded"""
@@ -109,26 +120,47 @@ class CanariasAutonomicosScraper(BaseScraper):
         }
     
     def get_source_url(self) -> str:
-        """Devuelve URL del BOC (con sistema de cache)"""
-        year_str = str(self.year)
+        """
+        Obtiene URL de la fuente con 3 niveles:
+        1. KNOWN_URLS (oficial)
+        2. Cache (descubierto previamente)
+        3. Auto-discovery (buscar en BOC)
+        """
         
-        # 1. KNOWN_URLS (oficial)
+        # Nivel 1: KNOWN_URLS
         if self.year in self.KNOWN_URLS:
-            url = self.KNOWN_URLS[self.year]
             print(f"✅ URL oficial (KNOWN_URLS) para {self.year}")
+            return self.KNOWN_URLS[self.year]
+        
+        # Nivel 2: Cache
+        if self.year in self.cache.get('autonomicos', {}):
+            url = self.cache['autonomicos'][self.year]
+            print(f"📦 URL en cache (descubierta previamente) para {self.year}: {url}")
             return url
         
-        # 2. Cache
-        if year_str in self.cached_urls:
-            url = self.cached_urls[year_str]
-            print(f"📦 URL en cache para {self.year}: {url}")
-            return url
+        # Nivel 3: Auto-discovery
+        print(f"🔍 Auto-discovery para {self.year} (no está en cache ni KNOWN_URLS)...")
+        print(f"   ⏱️  Esto puede tardar 1-2 minutos...")
         
-        # 3. Si no existe, dar instrucciones
+        urls = auto_discover_canarias(self.year)
+        url_autonomicos = urls.get('autonomicos')
+        
+        if url_autonomicos:
+            print(f"✅ URL encontrada por auto-discovery: {url_autonomicos}")
+            self._save_to_cache('autonomicos', self.year, url_autonomicos)
+            print(f"💾 URL guardada en cache")
+            print(f"💡 Próximas ejecuciones usarán el cache (instantáneo)")
+            return url_autonomicos
+        
+        # Error: no encontrada
         raise ValueError(
-            f"\n❌ No se encontró URL para {self.year}.\n\n"
-            f"Busca manualmente en https://www.gobiernodecanarias.org/boc/\n"
-            f"y añade la URL al archivo {self.CACHE_FILE}\n"
+            f"❌ No se pudo encontrar URL para festivos autonómicos Canarias {self.year}\n"
+            f"   Búsqueda realizada en:\n"
+            f"   1. KNOWN_URLS ❌\n"
+            f"   2. Cache ❌\n"
+            f"   3. Auto-discovery BOC ❌\n"
+            f"\n"
+            f"   Solución: Añade manualmente la URL en KNOWN_URLS o cache."
         )
     
     def get_isla_municipio(self, municipio: str) -> str:
