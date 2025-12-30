@@ -40,6 +40,7 @@ Thumbs.db
 data/*.xlsx
 data/*.json
 data/combined/
+!data/.gitkeep
 _old_scrapers/
 .git_backup/
 
