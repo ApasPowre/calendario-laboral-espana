@@ -372,17 +372,17 @@ class BOEScraper(BaseScraper):
             'Cantabria': 'cantabria',
             'Castilla y León': 'castilla_leon',
             'Castilla-La Mancha': 'castilla_la_mancha',
-            'Cataluña': 'cataluna',
+            'Cataluña (2)': 'cataluna',
             'Comunitat Valenciana': 'valencia',
             'Extremadura': 'extremadura',
             'Galicia': 'galicia',
-            'Madrid': 'madrid',
-            'Murcia': 'murcia',
-            'Navarra': 'navarra',
+            'Com. Madrid': 'madrid',  # ← CORREGIDO
+            'Región Murcia': 'murcia',  # ← CORREGIDO
+            'C. Foral Navarra': 'navarra',  # ← CORREGIDO
             'País Vasco': 'pais_vasco',
             'La Rioja': 'rioja',
-            'Ceuta': 'ceuta',
-            'Melilla': 'melilla'
+            'Ciudad de Ceuta': 'ceuta',  # ← CORREGIDO
+            'Ciudad de Melilla': 'melilla'  # ← CORREGIDO
         }
         
         headers_normalized = [CCAA_MAP.get(h, h.lower()) for h in headers]
@@ -426,8 +426,7 @@ class BOEScraper(BaseScraper):
             
             # PASO 3: Ver qué CCAA aplican
             ccaa_aplicables = []
-            tipo_festivo = 'nacional'  # Por defecto
-            
+
             for i, ccaa in enumerate(headers_normalized):
                 if i + 1 >= len(cells):
                     break
@@ -435,14 +434,13 @@ class BOEScraper(BaseScraper):
                 # Obtener contenido de la celda
                 celda = cells[i + 1].get_text(strip=True)
                 
-                # Si la celda tiene CUALQUIER contenido (*, **, ***, guiones, etc.)
-                # significa que el festivo APLICA a esa CCAA
-                if celda:  # No vacía = aplica
+                # Si la celda tiene CUALQUIER contenido → festivo APLICA
+                if celda:
                     ccaa_aplicables.append(ccaa)
-                    
-                    # Detectar tipo según marca
-                    if '***' in celda:
-                        tipo_festivo = 'autonomico'  # Festivo de CCAA
+
+            # Determinar tipo: si aplica a TODAS las CCAA = nacional, si solo a algunas = autonomico
+            total_ccaa = len(headers_normalized)
+            tipo_festivo = 'nacional' if len(ccaa_aplicables) == total_ccaa else 'autonomico'
             
             # PASO 4: Filtrar por CCAA si se especificó
             if ccaa_filtro:

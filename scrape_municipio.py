@@ -102,9 +102,9 @@ def scrape_festivos_completos(municipio: str, ccaa: str, year: int) -> Dict:
     print("=" * 80)
     
     # Eliminar duplicados por fecha (mantener el de mayor prioridad)
-    # Prioridad: local > autonomico > nacional
+    # Prioridad: local > nacional > autonomico
     festivos_unicos = {}
-    prioridad = {'local': 3, 'autonomico': 2, 'nacional': 1}
+    prioridad = {'local': 3, 'nacional': 2, 'autonomico': 1}
     
     for festivo in festivos_todos:
         fecha = festivo['fecha']

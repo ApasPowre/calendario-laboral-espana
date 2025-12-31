@@ -162,9 +162,25 @@ class MadridLocalesScraper(BaseScraper):
         return festivos
     
     def _normalizar_municipio(self, nombre: str) -> str:
-        """Normaliza el nombre del municipio"""
+        """Normaliza el nombre del municipio añadiendo espacios y capitalizando"""
+        import re
+        
+        # PASO 1: Añadir espacios en palabras clave pegadas
+        nombre = nombre.replace('deHenares', ' de Henares')
+        nombre = nombre.replace('dela', ' de la')
+        nombre = nombre.replace('delos', ' de los')
+        nombre = nombre.replace('delas', ' de las')
+        nombre = nombre.replace('del ', ' del ')
+        nombre = re.sub(r'de([A-Z])', r' de \1', nombre)  # "deAlcalá" → " de Alcalá"
+        
+        # PASO 2: Añadir espacios antes de mayúsculas en medio de palabra
+        # "AlcaládeHenares" → "Alcalá de Henares"
+        nombre = re.sub(r'([a-záéíóúñü])([A-ZÁÉÍÓÚÑÜ])', r'\1 \2', nombre)
+        
+        # PASO 3: Normalizar espacios múltiples
         nombre = ' '.join(nombre.split())
         
+        # PASO 4: Capitalizar correctamente
         palabras = nombre.split()
         resultado = []
         
