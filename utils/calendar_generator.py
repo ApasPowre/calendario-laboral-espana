@@ -101,18 +101,18 @@ class CalendarGenerator:
             max-width: 210mm;
             margin: 0 auto;
             background: white;
-            padding: 10mm;
+            padding: 5mm;
         }
         
         /* === HEADER === */
         .header {
-            margin-bottom: 15px;
-            padding-bottom: 15px;
+            margin-bottom: 8px;
+            padding-bottom: 8px;
             border-bottom: 2px solid #F1AB6C;
             display: grid;
-            grid-template-columns: 200px 1fr;
+            grid-template-columns: 160px 1fr;
             align-items: flex-start;
-            gap: 20px;
+            gap: 15px;
         }
         
         .header-left {
@@ -136,20 +136,20 @@ class CalendarGenerator:
         }
         
         .logo {
-            width: 200px;
+            width: 160px;
             height: auto;
         }
         
         .header h1 {
             color: #333;
-            font-size: 1.8em;
+            font-size: 1.4em;
             margin: 0;
             font-weight: normal;
         }
         
         .header h2 {
             color: #333;
-            font-size: 2.5em;
+            font-size: 2em;
             font-weight: bold;
             margin: 0;
         }
@@ -158,8 +158,8 @@ class CalendarGenerator:
         .calendar-grid {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
-            gap: 8px;
-            margin: 10px 0;
+            gap: 6px;
+            margin: 8px 0;
         }
         
         .month {
@@ -172,10 +172,10 @@ class CalendarGenerator:
         .month-header {
             background: #F1AB6C;
             color: white;
-            padding: 6px;
+            padding: 4px;
             font-weight: bold;
             text-align: center;
-            font-size: 0.9em;
+            font-size: 0.8em;
         }
         
         .weekdays {
@@ -186,10 +186,10 @@ class CalendarGenerator:
         }
         
         .weekday {
-            padding: 4px 2px;
+            padding: 3px 2px;
             text-align: center;
             font-weight: bold;
-            font-size: 0.7em;
+            font-size: 0.65em;
             color: #666;
         }
         
@@ -199,10 +199,10 @@ class CalendarGenerator:
         }
         
         .day {
-            padding: 6px 2px;
+            padding: 4px 2px;
             text-align: center;
-            font-size: 0.75em;
-            min-height: 28px;
+            font-size: 0.7em;
+            min-height: 24px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -239,13 +239,13 @@ class CalendarGenerator:
         
         /* === FOOTER === */
         .footer-content {
-            margin-top: 20px;
-            padding-top: 15px;
+            margin-top: 12px;
+            padding-top: 10px;
             border-top: 2px solid #eee;
             display: grid;
             grid-template-columns: 1fr 2fr;
-            gap: 20px;
-            font-size: 0.95em;
+            gap: 15px;
+            font-size: 0.85em;
         }
         
         /* Columna izquierda: Listado festivos */
@@ -255,17 +255,17 @@ class CalendarGenerator:
         }
         
         .festivos-list h3 {
-            font-size: 1em;
+            font-size: 0.9em;
             color: #333;
-            margin-bottom: 10px;
+            margin-bottom: 6px;
             font-weight: bold;
         }
         
         .festivo-item-list {
-            margin: 5px 0;
-            font-size: 0.85em;
+            margin: 3px 0;
+            font-size: 0.75em;
             color: #555;
-            line-height: 1.4;
+            line-height: 1.2;
         }
         
         .festivo-item-list.local {
@@ -329,6 +329,7 @@ class CalendarGenerator:
             
             .container {
                 padding: 0;
+                max-width: 100%;
             }
             
             * {
@@ -337,7 +338,28 @@ class CalendarGenerator:
             }
             
             @page {
-                margin: 15mm;
+                size: A4;
+                margin: 12mm;
+            }
+            
+            .header {
+                margin-bottom: 6px;
+                padding-bottom: 6px;
+            }
+            
+            .calendar-grid {
+                gap: 4px;
+                margin: 6px 0;
+            }
+            
+            .footer-content {
+                margin-top: 8px;
+                padding-top: 8px;
+                font-size: 0.8em;
+            }
+            
+            .footer-meta {
+                font-size: 0.65em;
             }
         }
         """
