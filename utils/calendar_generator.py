@@ -19,18 +19,39 @@ class CalendarGenerator:
     # Días de la semana en español
     DIAS_SEMANA = ['L', 'M', 'X', 'J', 'V', 'S', 'D']
     
-    def __init__(self, year: int, festivos: List[Dict], municipio: str = "", ccaa: str = "", empresa: str = ""):
+    def __init__(self, year: int, festivos: List[Dict], municipio: str = "", ccaa: str = "", 
+                 empresa: str = "", horario: Dict = None, datos_opcionales: Dict = None):
         self.year = year
         self.festivos = festivos
         self.municipio = municipio
         self.ccaa = ccaa
         self.empresa = empresa
+        self.horario = horario or {}
+        self.datos_opcionales = datos_opcionales or {}
+        
+        # Logo Biplaza embebido (base64)
+        self.logo_base64 = self._get_logo_biplaza()
         
         # Convertir festivos a set para búsqueda rápida
         self.festivos_set = {f['fecha'] for f in festivos}
         
         # Diccionario fecha → festivo para tooltips
         self.festivos_dict = {f['fecha']: f for f in festivos}
+    
+    def _get_logo_biplaza(self) -> str:
+        """Lee y convierte el logo de Biplaza a base64"""
+        import base64
+        import os
+        
+        logo_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'assets', 'logo_320x132.gif')
+        
+        try:
+            with open(logo_path, 'rb') as f:
+                logo_data = f.read()
+                return base64.b64encode(logo_data).decode()
+        except FileNotFoundError:
+            # Si no encuentra el logo, devolver string vacío
+            return ""
     
     def generate_html(self) -> str:
         """Genera el HTML completo del calendario"""
@@ -64,61 +85,97 @@ class CalendarGenerator:
             box-sizing: border-box;
         }
         
+        @page {
+            size: A4;
+            margin: 15mm;
+        }
+        
         body {
             font-family: 'Arial', sans-serif;
-            padding: 20px;
-            background: #f5f5f5;
+            background: white;
+            padding: 0;
+            margin: 0;
         }
         
         .container {
-            max-width: 1200px;
+            max-width: 210mm;
             margin: 0 auto;
             background: white;
-            padding: 30px;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            padding: 10mm;
         }
         
+        /* === HEADER === */
         .header {
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #F1AB6C;
+            display: grid;
+            grid-template-columns: 200px 1fr;
+            align-items: flex-start;
+            gap: 20px;
+        }
+        
+        .header-left {
+            text-align: left;
+        }
+        
+        .header-right {
+            text-align: right;
+        }
+        
+        .header-left {
+            text-align: left;
+        }
+        
+        .header-center {
             text-align: center;
-            margin-bottom: 30px;
-            padding-bottom: 20px;
-            border-bottom: 3px solid #FDB913;
+        }
+        
+        .header-right {
+            text-align: right;
+        }
+        
+        .logo {
+            width: 200px;
+            height: auto;
         }
         
         .header h1 {
             color: #333;
-            font-size: 2.5em;
-            margin-bottom: 10px;
-        }
-        
-        .header h2 {
-            color: #666;
-            font-size: 1.5em;
+            font-size: 1.8em;
+            margin: 0;
             font-weight: normal;
         }
         
+        .header h2 {
+            color: #333;
+            font-size: 2.5em;
+            font-weight: bold;
+            margin: 0;
+        }
+        
+        /* === CALENDARIO === */
         .calendar-grid {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
-            gap: 20px;
-            margin-top: 30px;
+            gap: 8px;
+            margin: 10px 0;
         }
         
         .month {
             background: #fff;
             border: 1px solid #ddd;
-            border-radius: 5px;
+            border-radius: 3px;
             overflow: hidden;
         }
         
         .month-header {
-            background: #FDB913;
+            background: #F1AB6C;
             color: white;
-            padding: 10px;
+            padding: 6px;
             font-weight: bold;
             text-align: center;
-            font-size: 1.1em;
+            font-size: 0.9em;
         }
         
         .weekdays {
@@ -129,10 +186,10 @@ class CalendarGenerator:
         }
         
         .weekday {
-            padding: 8px 4px;
+            padding: 4px 2px;
             text-align: center;
             font-weight: bold;
-            font-size: 0.85em;
+            font-size: 0.7em;
             color: #666;
         }
         
@@ -142,136 +199,166 @@ class CalendarGenerator:
         }
         
         .day {
-            padding: 8px 4px;
+            padding: 6px 2px;
             text-align: center;
-            font-size: 0.9em;
-            min-height: 35px;
+            font-size: 0.75em;
+            min-height: 28px;
             display: flex;
             align-items: center;
             justify-content: center;
             position: relative;
-            cursor: default;
         }
         
         .day.empty {
             background: #fafafa;
         }
         
+        /* Sábados y domingos en gris */
+        .day.sabado,
+        .day.domingo {
+            background: #e8e8e8;
+        }
+        
+        /* Festivos nacionales/autonómicos */
         .day.festivo {
-            background: #FDB913;
+            background: #F1AB6C !important;
             color: white;
             font-weight: bold;
         }
         
+        /* Festivos locales - con borde distintivo */
+        .day.festivo.local {
+            background: #F1AB6C !important;
+            border: 2px solid #d4894a;
+            box-shadow: inset 0 0 0 1px white;
+        }
+        
         .day.festivo:hover {
-            background: #e5a711;
+            opacity: 0.9;
         }
         
-        .day.festivo::after {
-            content: attr(data-festivo);
-            position: absolute;
-            bottom: 100%;
-            left: 50%;
-            transform: translateX(-50%);
-            background: #333;
-            color: white;
-            padding: 5px 10px;
-            border-radius: 4px;
-            font-size: 0.75em;
-            white-space: nowrap;
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 0.3s;
-            z-index: 10;
-            margin-bottom: 5px;
-        }
-        
-        .day.festivo:hover::after {
-            opacity: 1;
-        }
-        
-        .footer {
-            margin-top: 30px;
-            padding-top: 20px;
+        /* === FOOTER === */
+        .footer-content {
+            margin-top: 20px;
+            padding-top: 15px;
             border-top: 2px solid #eee;
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 20px;
+            font-size: 0.95em;
         }
         
-        .legend {
-            display: flex;
-            justify-content: center;
-            gap: 30px;
-            flex-wrap: wrap;
-            margin-bottom: 20px;
+        /* Columna izquierda: Listado festivos */
+        .festivos-list {
+            padding-right: 15px;
+            border-right: 1px solid #ddd;
         }
         
-        .legend-item {
-            display: flex;
-            align-items: center;
-            gap: 10px;
+        .festivos-list h3 {
+            font-size: 1em;
+            color: #333;
+            margin-bottom: 10px;
+            font-weight: bold;
         }
         
-        .legend-color {
-            width: 30px;
-            height: 20px;
+        .festivo-item-list {
+            margin: 5px 0;
+            font-size: 0.85em;
+            color: #555;
+            line-height: 1.4;
+        }
+        
+        .festivo-item-list.local {
+            color: #F1AB6C;
+            font-weight: bold;
+        }
+        
+        /* Columna derecha: Info empresa */
+        .info-empresa-footer {
+            padding-left: 15px;
+        }
+        
+        .info-empresa-footer .empresa-nombre-footer {
+            font-size: 1.3em;
+            color: #F1AB6C;
+            font-weight: bold;
+            margin-bottom: 12px;
+        }
+        
+        .info-empresa-footer p {
+            margin: 6px 0;
+            font-size: 0.9em;
+            color: #333;
+            line-height: 1.5;
+        }
+        
+        .info-empresa-footer .horario-box {
+            margin: 12px 0;
+            padding: 12px;
+            background: #f8f8f8;
+            border-left: 3px solid #F1AB6C;
             border-radius: 3px;
         }
         
-        .legend-color.festivo {
-            background: #FDB913;
+        .info-empresa-footer .horario-box h4 {
+            font-size: 0.95em;
+            color: #333;
+            margin-bottom: 8px;
         }
         
-        .info {
+        .info-empresa-footer .horario-box p {
+            margin: 4px 0;
+            font-size: 0.85em;
+        }
+        
+        .footer-meta {
+            margin-top: 15px;
+            padding-top: 10px;
+            border-top: 1px solid #eee;
             text-align: center;
-            color: #666;
-            font-size: 0.9em;
-            margin-top: 20px;
+            font-size: 0.75em;
+            color: #999;
         }
         
         @media print {
             body {
                 background: white;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
             }
             
             .container {
-                box-shadow: none;
                 padding: 0;
             }
             
-            .day.festivo::after {
-                display: none;
+            * {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
             }
-        }
-        
-        @media (max-width: 1024px) {
-            .calendar-grid {
-                grid-template-columns: repeat(3, 1fr);
-            }
-        }
-        
-        @media (max-width: 768px) {
-            .calendar-grid {
-                grid-template-columns: repeat(2, 1fr);
-            }
-        }
-        
-        @media (max-width: 480px) {
-            .calendar-grid {
-                grid-template-columns: 1fr;
+            
+            @page {
+                margin: 15mm;
             }
         }
         """
     
     def _get_header(self) -> str:
-        """Genera el header del calendario"""
+        """Genera el header del calendario con logo Biplaza, título y año alineados a la derecha"""
         
-        empresa_html = f"<p style='color: #999; margin-top: 10px;'>{self.empresa}</p>" if self.empresa else ""
+        logo_html = ""
+        if self.logo_base64:
+            logo_html = f'<img src="data:image/gif;base64,{self.logo_base64}" class="logo" alt="Biplaza">'
         
         return f"""
     <div class="container">
         <div class="header">
-            <h1>Calendario laboral</h1>
-            <h2>{self.year}</h2>
-            {empresa_html}
+            <div class="header-left">
+                {logo_html}
+            </div>
+            <div class="header-right">
+                <h1>Calendario laboral</h1>
+                <h2>{self.year}</h2>
+            </div>
         </div>
 """
     
@@ -307,7 +394,7 @@ class CalendarGenerator:
         
         # Días del mes
         for week in cal:
-            for day in week:
+            for day_index, day in enumerate(week):
                 if day == 0:
                     # Día vacío
                     html += '                <div class="day empty"></div>\n'
@@ -315,51 +402,129 @@ class CalendarGenerator:
                     # Construir fecha
                     fecha = f"{self.year:04d}-{month:02d}-{day:02d}"
                     
-                    # Verificar si es festivo
+                    # Determinar día de la semana (0=Lunes, 6=Domingo)
+                    dia_semana = day_index
+                    
+                    # Clases CSS
+                    clases = ['day']
+                    
+                    # Añadir clase de fin de semana (si no es festivo)
+                    if fecha not in self.festivos_set:
+                        if dia_semana == 5:  # Sábado
+                            clases.append('sabado')
+                        elif dia_semana == 6:  # Domingo
+                            clases.append('domingo')
+                    
+                    # Verificar si es festivo (prioridad sobre fin de semana)
                     if fecha in self.festivos_set:
+                        clases.append('festivo')
                         festivo = self.festivos_dict[fecha]
                         descripcion = festivo.get('descripcion', 'Festivo')
-                        html += f'                <div class="day festivo" data-festivo="{descripcion}">{day}</div>\n'
+                        
+                        # Añadir clase 'local' si es festivo local
+                        if festivo.get('ambito') == 'municipal' or festivo.get('tipo') == 'local':
+                            clases.append('local')
+                        
+                        html += f'                <div class="{" ".join(clases)}" data-festivo="{descripcion}">{day}</div>\n'
                     else:
-                        html += f'                <div class="day">{day}</div>\n'
+                        html += f'                <div class="{" ".join(clases)}">{day}</div>\n'
         
         html += '            </div>\n        </div>\n'
         return html
     
     def _get_footer(self) -> str:
-        """Genera el footer con leyenda e información"""
+        """Genera el footer con listado festivos (izq) e info empresa (der)"""
+        from datetime import datetime
         
-        # Contar festivos por tipo
-        tipos = {}
-        for f in self.festivos:
-            tipo = f.get('tipo', 'otro')
-            tipos[tipo] = tipos.get(tipo, 0) + 1
+        # === LISTADO DE FESTIVOS (todos, ordenados por fecha) ===
+        festivos_ordenados = sorted(self.festivos, key=lambda x: x['fecha'])
         
-        # Información del municipio
-        municipio_info = f"<p><strong>Municipio:</strong> {self.municipio}, {self.ccaa.upper()}</p>" if self.municipio else ""
+        festivos_list_html = ""
+        for fest in festivos_ordenados:
+            fecha_obj = datetime.strptime(fest['fecha'], '%Y-%m-%d')
+            dia = fecha_obj.day
+            mes = self._get_month_name(fecha_obj.month)
+            descripcion = fest.get('descripcion', '').replace('Ãrsula', 'Úrsula').replace('Ã', 'í')
+            
+            # Marcar locales con clase especial
+            clase_extra = ' local' if fest.get('ambito') == 'municipal' or fest.get('tipo') == 'local' else ''
+            
+            festivos_list_html += f'<div class="festivo-item-list{clase_extra}">{dia} de {mes}: {descripcion}</div>\n'
         
-        # Resumen de festivos
-        resumen = "<p><strong>Total festivos:</strong> " + str(len(self.festivos))
-        if tipos:
-            detalle = " (" + ", ".join([f"{v} {k}" for k, v in tipos.items()]) + ")"
-            resumen += detalle
-        resumen += "</p>"
+        # === INFORMACIÓN EMPRESA ===
+        empresa_html = f'<div class="empresa-nombre-footer">{self.empresa}</div>' if self.empresa else ''
+        
+        # Datos opcionales
+        datos_html = ""
+        if self.datos_opcionales.get('direccion'):
+            direccion = self.datos_opcionales['direccion'].replace('\n', '<br>')
+            datos_html += f'<p><strong>Domicilio del centro de trabajo:</strong><br>{direccion}</p>\n'
+        
+        if self.datos_opcionales.get('convenio'):
+            datos_html += f'<p><strong>Convenio aplicable:</strong> {self.datos_opcionales["convenio"]}</p>\n'
+        
+        if self.datos_opcionales.get('num_patronal'):
+            datos_html += f'<p><strong>Número patronal:</strong> {self.datos_opcionales["num_patronal"]}</p>\n'
+        
+        if self.datos_opcionales.get('mutua'):
+            datos_html += f'<p><strong>Mutua de accidentes:</strong> {self.datos_opcionales["mutua"]}</p>\n'
+        
+        # === HORARIO ===
+        horario_html = ""
+        if self.horario.get('invierno'):
+            if self.horario.get('tiene_verano') and self.horario.get('verano'):
+                # Horario diferenciado
+                horario_content = f"""
+                    <p><strong>Horario invierno:</strong><br>{self.horario['invierno'].replace(chr(10), '<br>')}</p>
+                    <p><strong>Horario verano:</strong><br>{self.horario['verano'].replace(chr(10), '<br>')}</p>
+                """
+                if self.horario.get('verano_inicio') and self.horario.get('verano_fin'):
+                    inicio = self.horario['verano_inicio'].strftime('%d/%m')
+                    fin = self.horario['verano_fin'].strftime('%d/%m')
+                    horario_content += f"<p style='font-size: 0.8em; color: #666;'>(Del {inicio} al {fin})</p>"
+                
+                horario_html = f"""
+                <div class="horario-box">
+                    <h4>Horario laboral</h4>
+                    {horario_content}
+                </div>
+                """
+            else:
+                # Horario único
+                horario_html = f"""
+                <div class="horario-box">
+                    <h4>Horario laboral</h4>
+                    <p>{self.horario['invierno'].replace(chr(10), '<br>')}</p>
+                </div>
+                """
         
         return f"""
-        <div class="footer">
-            <div class="legend">
-                <div class="legend-item">
-                    <div class="legend-color festivo"></div>
-                    <span>Festivo laboral</span>
-                </div>
+        <div class="footer-content">
+            <div class="festivos-list">
+                <h3>FIESTAS LABORALES {self.year}</h3>
+                {festivos_list_html}
             </div>
-            <div class="info">
-                {municipio_info}
-                {resumen}
-                <p style="margin-top: 10px; font-size: 0.85em;">
-                    Generado el {datetime.now().strftime('%d/%m/%Y')}
-                </p>
+            
+            <div class="info-empresa-footer">
+                {empresa_html}
+                {datos_html}
+                {horario_html}
             </div>
+        </div>
+        
+        <div class="footer-meta">
+            <p>Municipio: {self.municipio.upper()}, {self.ccaa.upper()} | 
+            Total festivos: {len(self.festivos)} | 
+            Generado el {datetime.now().strftime('%d/%m/%Y')}</p>
         </div>
     </div>
 """
+    
+    def _get_month_name(self, month: int) -> str:
+        """Devuelve nombre del mes en español"""
+        meses = {
+            1: 'enero', 2: 'febrero', 3: 'marzo', 4: 'abril',
+            5: 'mayo', 6: 'junio', 7: 'julio', 8: 'agosto',
+            9: 'septiembre', 10: 'octubre', 11: 'noviembre', 12: 'diciembre'
+        }
+        return meses.get(month, '')

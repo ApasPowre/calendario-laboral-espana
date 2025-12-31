@@ -124,6 +124,9 @@ def main():
     with st.sidebar:
         st.header("⚙️ Configuración")
         
+        # === DATOS BÁSICOS ===
+        st.subheader("📍 Ubicación")
+        
         # Selección de CCAA
         ccaa = st.selectbox(
             "Comunidad Autónoma",
@@ -142,19 +145,94 @@ def main():
             "Año",
             min_value=2025,
             max_value=2030,
-            value=2025,
+            value=2026,
             step=1
         )
         
         st.markdown("---")
         
-        # Personalización (opcional)
-        st.subheader("🎨 Personalización")
+        # === DATOS EMPRESA ===
+        st.subheader("🏢 Empresa")
         
         empresa = st.text_input(
-            "Nombre empresa (opcional)",
-            placeholder="Ej: Biplaza Asesoría"
+            "Nombre empresa *",
+            placeholder="Ej: Biplaza Asesoría, S.L."
         )
+        
+        # Campos opcionales expandibles
+        with st.expander("➕ Más información (opcional)"):
+            direccion = st.text_area(
+                "Dirección centro de trabajo",
+                placeholder="Ej: Calle Obispo Rey Redondo 30, 1º\nSan Cristóbal de La Laguna"
+            )
+            
+            convenio = st.text_input(
+                "Convenio aplicable",
+                placeholder="Ej: Gestorías Administrativas"
+            )
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                num_patronal = st.text_input(
+                    "Nº Patronal",
+                    placeholder="38 1125814 10"
+                )
+            with col2:
+                mutua = st.text_input(
+                    "Mutua",
+                    placeholder="Ibermutuamur"
+                )
+        
+        st.markdown("---")
+        
+        # === HORARIO ===
+        st.subheader("🕐 Horario laboral")
+        
+        # ¿Hay horario de verano?
+        tiene_verano = st.checkbox("Horario diferenciado verano/invierno")
+        
+        if tiene_verano:
+            # HORARIO INVIERNO
+            st.markdown("**Horario invierno:**")
+            horario_inv = st.text_area(
+                "Descripción horario invierno",
+                placeholder="Lunes a viernes: 9:00-13:00 / 17:00-20:00\nSábados: 9:00-13:30",
+                key="horario_inv",
+                height=80
+            )
+            
+            # HORARIO VERANO
+            st.markdown("**Horario verano:**")
+            horario_ver = st.text_area(
+                "Descripción horario verano",
+                placeholder="Lunes a viernes: 8:00-15:00",
+                key="horario_ver",
+                height=80
+            )
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                fecha_verano_inicio = st.date_input(
+                    "Inicio verano",
+                    value=None,
+                    help="Ej: 15 de junio"
+                )
+            with col2:
+                fecha_verano_fin = st.date_input(
+                    "Fin verano",
+                    value=None,
+                    help="Ej: 15 de septiembre"
+                )
+        else:
+            # HORARIO ÚNICO
+            horario_inv = st.text_area(
+                "Descripción horario",
+                placeholder="Lunes a viernes: 9:00-13:00 / 17:00-20:00\nSábados: 9:00-13:30",
+                height=100
+            )
+            horario_ver = None
+            fecha_verano_inicio = None
+            fecha_verano_fin = None
         
         st.markdown("---")
         
@@ -162,7 +240,17 @@ def main():
         generar = st.button("🎨 Generar Calendario", type="primary", use_container_width=True)
     
     # Área principal
+    # Área principal
     if generar:
+        # Validar datos requeridos
+        if not empresa:
+            st.error("❌ El nombre de la empresa es obligatorio")
+            return
+        
+        if not horario_inv:
+            st.error("❌ Debes especificar el horario laboral")
+            return
+        
         with st.spinner(f"⏳ Generando calendario para {municipio}, {ccaa.title()} {year}..."):
             
             # Ejecutar scraper
@@ -171,13 +259,32 @@ def main():
             if data:
                 st.success(f"✅ Calendario generado: {data['total_festivos']} festivos")
                 
+                # Preparar datos de horario
+                horario_data = {
+                    'tiene_verano': tiene_verano,
+                    'invierno': horario_inv,
+                    'verano': horario_ver if tiene_verano else None,
+                    'verano_inicio': fecha_verano_inicio if tiene_verano else None,
+                    'verano_fin': fecha_verano_fin if tiene_verano else None
+                }
+                
+                # Preparar datos opcionales
+                datos_opcionales = {
+                    'direccion': direccion if direccion else None,
+                    'convenio': convenio if convenio else None,
+                    'num_patronal': num_patronal if num_patronal else None,
+                    'mutua': mutua if mutua else None
+                }
+                
                 # Generar HTML del calendario
                 generator = CalendarGenerator(
                     year=year,
                     festivos=data['festivos'],
                     municipio=municipio,
                     ccaa=ccaa,
-                    empresa=empresa
+                    empresa=empresa,
+                    horario=horario_data,
+                    datos_opcionales=datos_opcionales
                 )
                 
                 html = generator.generate_html()
@@ -187,7 +294,7 @@ def main():
                 
                 with tab1:
                     # Mostrar preview del calendario
-                    st.components.v1.html(html, height=1400, scrolling=True)
+                    st.components.v1.html(html, height=1600, scrolling=True)
                     
                     # Botones de descarga
                     col1, col2 = st.columns(2)
@@ -245,9 +352,9 @@ def main():
         with col2:
             st.markdown("""
             **🎨 Personalizable**
-            - Nombre de empresa
+            - Logo empresa
+            - Horario laboral
             - Diseño profesional
-            - Listo para imprimir
             """)
         
         with col3:
@@ -255,18 +362,8 @@ def main():
             **📥 Múltiples formatos**
             - HTML interactivo
             - Impresión a PDF
-            - Datos en tabla
+            - Listo para publicar
             """)
-        
-        # Ejemplo
-        st.markdown("---")
-        st.markdown("### 📸 Ejemplo")
-        st.markdown("El calendario generado incluye:")
-        st.markdown("- Vista de 12 meses en cuadrícula")
-        st.markdown("- Festivos destacados en amarillo")
-        st.markdown("- Tooltip al pasar el ratón sobre festivos")
-        st.markdown("- Diseño responsive (móvil, tablet, desktop)")
-        st.markdown("- Listo para imprimir")
 
 
 if __name__ == "__main__":
