@@ -123,28 +123,29 @@ class CanariasLocalesScraper(BaseScraper):
         Parsea la Orden del BOC y extrae festivos locales por municipio.
         Cada municipio tiene exactamente 2 festivos locales.
         """
-        soup = BeautifulSoup(content, 'lxml')
-        festivos = []
-        
-        # Extraer texto y normalizar encoding
         import html as html_lib
         import unicodedata
         
+        # CRITICAL: Fix encoding BEFORE BeautifulSoup processes it
+        content = content.replace('Ã\x93', 'Ó')
+        content = content.replace('Ã\x81', 'Á')
+        content = content.replace('Ã\x89', 'É')
+        content = content.replace('Ã\x8D', 'Í')
+        content = content.replace('Ã\x9A', 'Ú')
+        content = content.replace('Ã\x91', 'Ñ')
+        content = content.replace('Ã\x9C', 'Ü')
+        
         def normalizar_para_comparar(texto):
-            """Normaliza texto para comparación flexible, corrigiendo encoding corrupto del BOC"""
-            import unicodedata
-            
-            # PRIMERO: Corregir encoding corrupto HTML (ANTES de normalizar)
-            # El BOC convierte Ú→Ã que luego se normaliza como O
-            texto = texto.replace('ÃRSULA', 'URSULA')
-            texto = texto.replace('Ãrsula', 'Ursula')
-            
-            # SEGUNDO: Normalizar Unicode (quitar tildes)
+            """Normaliza texto corrigiendo encoding corrupto del BOC"""
+            # SECOND: Normalize Unicode (remove accents)
             texto = unicodedata.normalize('NFKD', texto)
             texto = texto.encode('ASCII', 'ignore').decode('ASCII')
             
-            # TERCERO: Limpiar espacios y mayúsculas
+            # THIRD: Clean spaces and uppercase
             return texto.upper().strip().replace(' ', '')
+        
+        soup = BeautifulSoup(content, 'lxml')
+        festivos = []
         
         content = html_lib.unescape(content)
         soup = BeautifulSoup(content, 'lxml')
@@ -180,6 +181,8 @@ class CanariasLocalesScraper(BaseScraper):
                         else:
                             mun_buscado = normalizar_para_comparar(self.municipio)
                             mun_encontrado = normalizar_para_comparar(municipio_actual)
+                            
+                            print(f"      🔍 Comparando: '{mun_buscado}' vs '{mun_encontrado}' → {mun_buscado == mun_encontrado}")
                             
                             # Coincidencia exacta o parcial
                             if mun_buscado == mun_encontrado:
@@ -217,9 +220,17 @@ class CanariasLocalesScraper(BaseScraper):
                             provincia = self._detectar_provincia(municipio_actual)
                             
                             # Limpiar encoding corrupto del BOC
+                            descripcion = descripcion.replace('Ã±', 'ñ')  # ñ
+                            descripcion = descripcion.replace('Ã\x91', 'Ñ')  # Ñ (formato hex)
+                            descripcion = descripcion.replace('Ã³', 'ó')  # ó
+                            descripcion = descripcion.replace('Ã­', 'í')  # í
+                            descripcion = descripcion.replace('Ã¡', 'á')  # á
+                            descripcion = descripcion.replace('Ã©', 'é')  # é
+                            descripcion = descripcion.replace('Ãº', 'ú')  # ú
+                            descripcion = descripcion.replace('Ã¼', 'ü')  # ü
+                            descripcion = descripcion.replace('Ã\x9c', 'Ü')  # Ü (formato hex)
                             descripcion = descripcion.replace('Ãsimo', 'ísimo')
-                            descripcion = descripcion.replace('Ãrsula', 'Úrsula') 
-                            descripcion = descripcion.replace('Ã', 'í')
+                            descripcion = descripcion.replace('Ãrsula', 'Úrsula')
 
                             festivo = {
                                 'municipio': municipio_actual,
@@ -244,7 +255,7 @@ class CanariasLocalesScraper(BaseScraper):
             else:
                 mun_buscado = normalizar_para_comparar(self.municipio)
                 mun_encontrado = normalizar_para_comparar(municipio_actual)
-                
+                                
                 # Coincidencia exacta o parcial
                 if mun_buscado == mun_encontrado:
                     debe_incluir = True
@@ -254,7 +265,7 @@ class CanariasLocalesScraper(BaseScraper):
             if debe_incluir:
                 for fest in festivos_municipio:
                     festivos.append(fest)
-        
+                
         return festivos
     
     def _normalizar_municipio(self, municipio: str) -> str:
