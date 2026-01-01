@@ -8,6 +8,7 @@ import subprocess
 import json
 import os
 from pathlib import Path
+from datetime import datetime
 
 # Añadir al path para imports
 import sys
@@ -144,8 +145,8 @@ def main():
         year = st.number_input(
             "Año",
             min_value=2025,
-            max_value=2030,
-            value=2026,
+            max_value=2040,
+            value=datetime.now().year,  # Año actual dinámico
             step=1
         )
         

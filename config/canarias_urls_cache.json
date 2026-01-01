@@ -1,10 +1,12 @@
 {
   "autonomicos": {
     "2025": "https://www.gobiernodecanarias.org/boc/2024/187/3013.html",
-    "2026": "https://www.gobiernodecanarias.org/boc/2025/088/1659.html"
+    "2026": "https://www.gobiernodecanarias.org/boc/2025/088/1659.html",
+    "2024": "https://www.gobiernodecanarias.org/boc/2024/187/3013.html"
   },
   "locales": {
     "2025": "https://www.gobiernodecanarias.org/boc/2024/238/3948.html",
-    "2026": "https://www.gobiernodecanarias.org/boc/2025/165/3029.html"
+    "2026": "https://www.gobiernodecanarias.org/boc/2025/165/3029.html",
+    "2024": "https://www.gobiernodecanarias.org/boc/2023/253/025.html"
   }
 }
