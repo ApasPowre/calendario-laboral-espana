@@ -83,42 +83,23 @@ MUNICIPIOS = {
 
 
 def ejecutar_scraper(municipio: str, ccaa: str, year: int) -> dict:
-    """Ejecuta el scraper y devuelve los datos"""
-    
-    # Crear carpeta data si no existe
-    os.makedirs('data', exist_ok=True)
+    """Ejecuta el scraper y devuelve los datos SIN guardar archivos"""
     
     try:
+        # Importar función de scraping
+        from scrape_municipio import scrape_festivos_completos
+        
+        # Ejecutar scraping (devuelve dict con festivos)
         data = scrape_festivos_completos(municipio, ccaa, year)
+        
+        # NO guardar archivos - solo devolver datos en memoria
         return data
         
-    try:
-        # Ejecutar scraper
-        result = subprocess.run(
-            ['python', 'scrape_municipio.py', municipio, ccaa, str(year)],
-            capture_output=True,
-            text=True,
-            timeout=180  # 3 minutos máximo
-        )
-        
-        # Leer JSON generado
-        municipio_slug = municipio.lower().replace(' ', '_')
-        json_path = f'data/{ccaa}_{municipio_slug}_completo_{year}.json'
-        
-        if os.path.exists(json_path):
-            with open(json_path, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        else:
-            st.error(f"No se encontró el archivo: {json_path}")
-            return None
-            
-    except subprocess.TimeoutExpired:
-        st.error("⏱️ Tiempo de espera agotado. Intenta de nuevo.")
-        return None
     except Exception as e:
-        st.error(f"❌ Error ejecutando scraper: {e}")
+        st.error(f"Error en el scraping: {str(e)}")
+        import traceback
+        st.code(traceback.format_exc())
         return None
-
 
 def main():
     # Header

@@ -241,7 +241,7 @@ def main():
         data = scrape_festivos_completos(municipio, ccaa, year)
         
         # Guardar
-        guardar_resultados(data, municipio, ccaa, year)
+        #guardar_resultados(data, municipio, ccaa, year)
         
         # Mostrar resumen
         mostrar_resumen(data)
