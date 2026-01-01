@@ -83,9 +83,15 @@ MUNICIPIOS = {
 
 
 def ejecutar_scraper(municipio: str, ccaa: str, year: int) -> dict:
-    """
-    Ejecuta el scraper y devuelve los festivos
-    """
+    """Ejecuta el scraper y devuelve los datos"""
+    
+    # Crear carpeta data si no existe
+    os.makedirs('data', exist_ok=True)
+    
+    try:
+        data = scrape_festivos_completos(municipio, ccaa, year)
+        return data
+        
     try:
         # Ejecutar scraper
         result = subprocess.run(
