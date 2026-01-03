@@ -1,272 +1,244 @@
 # 📅 Calendario Laboral España
 
-Sistema automatizado para extraer festivos laborales oficiales en España desde fuentes gubernamentales (BOE, BOCM, BOC Canarias).
+**Generador automático de calendarios laborales personalizados por municipio en España.**
+
+Extrae festivos nacionales, autonómicos y locales desde fuentes oficiales (BOE, boletines autonómicos) y genera calendarios visuales listos para imprimir o descargar.
+
+[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://calendario-laboral-espana-yornkkgnnzizqn4omxfhr5.streamlit.app)
+
+---
 
 ## 🎯 Características
 
-### ✅ Implementado
+✅ **4 Comunidades Autónomas** completas (Canarias, Madrid, Andalucía, Valencia)  
+✅ **1,555+ municipios** soportados con festivos exactos  
+✅ **14 festivos precisos** por municipio (8 nacionales + 4-6 autonómicos + 2 locales)  
+✅ **Auto-discovery** automático de URLs de boletines oficiales  
+✅ **Parsing inteligente** de HTML, PDF y YAML  
+✅ **Generación de PDF** para imprimir con branding personalizable  
+✅ **Deploy en Streamlit Cloud** - acceso público y gratuito  
 
-- **BOE (Festivos Nacionales)**: Auto-discovery para cualquier año desde 2012
-- **Canarias**: Sistema completo con auto-discovery BOC
-  - Festivos autonómicos con filtrado por isla
-  - Festivos locales (88 municipios)
-  - Gestión automática de sustituciones
-  - Años disponibles: 2025, 2026
-- **Madrid**: Parser completo BOCM
-  - Festivos autonómicos
-  - Festivos locales (181 municipios)
-  - Años disponibles: 2026
-- **Scraper Unificado**: Un comando para BOE + CCAA + locales
-- **Eliminación de duplicados**: Prioridad local > autonómico > nacional
-- **Múltiples formatos**: JSON y Excel
+---
 
-### ⏳ Pendiente
+## 📊 Cobertura Actual
 
-- Auto-discovery para Madrid (BOCM tiene anti-scraping)
-- 17 comunidades autónomas restantes
-- Generalización de lógica de sustituciones
+| CCAA | Municipios | Provincias/Islas | Fuente Oficial | Auto-discovery |
+|------|------------|------------------|----------------|----------------|
+| **Canarias** | 88 | 2 islas principales | BOC | ❌ |
+| **Madrid** | 181 | 1 provincia | BOCM | ❌ |
+| **Andalucía** | 746 | 8 provincias | BOJA | ✅ |
+| **Valencia** | 540+ | 3 provincias | DOGV | ✅ |
+| **TOTAL** | **1,555+** | **14** | - | **50%** |
 
-## 🚀 Instalación
+**Progreso:** 4/17 CCAA (24% de España)
 
+---
+
+## 🚀 Uso Rápido
+
+### Opción 1: App Web (Recomendado)
+
+Accede directamente a la aplicación desplegada:
+
+👉 **[calendario-laboral-espana.streamlit.app](https://calendario-laboral-espana-yornkkgnnzizqn4omxfhr5.streamlit.app)**
+
+1. Selecciona tu comunidad autónoma
+2. Selecciona tu municipio
+3. Elige el año
+4. Genera el calendario visual
+5. Descarga el PDF para imprimir
+
+### Opción 2: Línea de Comandos
 ```bash
 # Clonar repositorio
 git clone https://github.com/tu-usuario/calendario-laboral-espana.git
 cd calendario-laboral-espana
 
-# Crear entorno virtual
-python3 -m venv venv
-source venv/bin/activate  # En Windows: venv\Scripts\activate
-
 # Instalar dependencias
+python -m venv venv
+source venv/bin/activate  # En Windows: venv\Scripts\activate
 pip install -r requirements.txt
+
+# Generar calendario para un municipio
+python scrape_municipio.py "SEVILLA" andalucia 2026
+
+# Iniciar la app local
+streamlit run app.py
 ```
 
-## 📖 Uso
+---
 
-### Comando Unificado (Recomendado)
+## 🛠️ Arquitectura Técnica
 
-Extrae festivos nacionales + autonómicos + locales en un solo comando:
+### Scrapers Modulares
 
-```bash
-# Canarias - Arrecife 2025
-python scrape_municipio.py "Arrecife" canarias 2025
-
-# Madrid - Alcalá de Henares 2026
-python scrape_municipio.py "Alcalá de Henares" madrid 2026
+El proyecto utiliza scrapers especializados para cada fuente oficial:
+```
+scrapers/
+├── core/
+│   ├── base_scraper.py      # Clase base abstracta
+│   └── boe_scraper.py        # Festivos nacionales + autonómicos
+├── ccaa/
+│   ├── canarias/
+│   │   └── locales.py        # BOC - YAML parsing
+│   ├── madrid/
+│   │   └── locales.py        # BOCM - PDF parsing
+│   ├── andalucia/
+│   │   └── locales.py        # BOJA - HTML secuencial
+│   └── valencia/
+│       └── locales.py        # DOGV - PDF multiidioma
+└── discovery/
+    └── ccaa/
+        ├── andalucia_discovery.py  # Auto-discovery BOJA
+        └── valencia_discovery.py   # Auto-discovery DOGV
 ```
 
-**Salida:**
-- `data/canarias_arrecife_completo_2025.json`
-- `data/canarias_arrecife_completo_2025.xlsx`
+### Auto-discovery Inteligente
 
-### Scrapers Individuales
+Los scrapers de Andalucía y Valencia incluyen **auto-discovery** que:
 
-```bash
-# Solo festivos nacionales
-python -m scrapers.core.boe_scraper 2025
+1. 🔍 Busca automáticamente en páginas oficiales
+2. 📋 Extrae signaturas y enlaces
+3. ✅ Valida contenido (provincias, municipios, año)
+4. 💾 Cachea URLs descubiertas
+5. 🔄 Actualiza automáticamente cada año
 
-# Solo autonómicos de Canarias
-python -m scrapers.ccaa.canarias.autonomicos 2025
+### Parsing Robusto
 
-# Solo locales de Canarias para un municipio
-python -m scrapers.ccaa.canarias.locales "Santa Cruz de Tenerife" 2025
+- **HTML:** BeautifulSoup con normalización de caracteres (ñ, ü, tildes)
+- **PDF:** pypdf con extracción de texto y validación de estructura
+- **YAML:** Safe loading con manejo de encoding UTF-8
+- **Formatos complejos:** Regex adaptativo para "14y17deagosto", "27 y 28 de agosto"
 
-# Solo autonómicos de Madrid
-python -m scrapers.ccaa.madrid.autonomicos 2026
+---
 
-# Solo locales de Madrid para un municipio
-python -m scrapers.ccaa.madrid.locales "Madrid" 2026
+## 📝 Ejemplos de Salida
+
+### Calendario Visual
+```
+Calendario generado: 14 festivos
+
+┌─────────────────────────────────────────┐
+│  CALENDARIO LABORAL 2026 - SEVILLA      │
+└─────────────────────────────────────────┘
+
+📅 FESTIVOS:
+   2026-01-01 - [NACIONAL   ] Año Nuevo
+   2026-01-06 - [NACIONAL   ] Epifanía del Señor
+   2026-02-28 - [AUTONOMICO ] Día de Andalucía
+   2026-04-02 - [AUTONOMICO ] Jueves Santo
+   2026-04-03 - [NACIONAL   ] Viernes Santo
+   2026-04-22 - [LOCAL      ] Festivo local de Sevilla
+   2026-05-01 - [NACIONAL   ] Fiesta del Trabajo
+   2026-06-04 - [LOCAL      ] Festivo local de Sevilla
+   2026-08-15 - [NACIONAL   ] Asunción de la Virgen
+   2026-10-12 - [NACIONAL   ] Fiesta Nacional de España
+   2026-11-02 - [AUTONOMICO ] Día siguiente a Todos los Santos
+   2026-12-07 - [AUTONOMICO ] Lunes siguiente al Día de la Constitución
+   2026-12-08 - [NACIONAL   ] Inmaculada Concepción
+   2026-12-25 - [NACIONAL   ] Natividad del Señor
 ```
 
-## 🏗️ Arquitectura
-
-```
-calendario-laboral-espana/
-│
-├── scrapers/
-│   ├── core/
-│   │   ├── base_scraper.py          # Clase base común
-│   │   └── boe_scraper.py           # Festivos nacionales
-│   │
-│   ├── ccaa/
-│   │   ├── canarias/
-│   │   │   ├── autonomicos.py       # Festivos autonómicos Canarias
-│   │   │   └── locales.py           # Festivos locales Canarias
-│   │   └── madrid/
-│   │       ├── autonomicos.py       # Festivos autonómicos Madrid
-│   │       └── locales.py           # Festivos locales Madrid
-│   │
-│   └── discovery/
-│       └── ccaa/
-│           ├── canarias_discovery.py # Auto-discovery BOC
-│           └── madrid_discovery.py   # Auto-discovery BOCM (WIP)
-│
-├── config/
-│   ├── boe_urls_cache.json          # Cache URLs BOE
-│   ├── canarias_urls_cache.json     # Cache URLs BOC
-│   └── madrid_urls_cache.json       # Cache URLs BOCM
-│
-├── data/                             # Salidas JSON/Excel
-├── scrape_municipio.py              # Scraper unificado
-└── requirements.txt
-```
-
-## 🔍 Auto-Discovery
-
-### Canarias (BOC)
-
-El sistema busca automáticamente las publicaciones oficiales:
-
-- **Autonómicos**: Busca en BOC 50-250 del año anterior
-- **Locales**: Busca en BOC 130-280 del año anterior
-- **Cache**: URLs descubiertas se guardan automáticamente
-- **Conversión**: PDF → HTML automática
-
-```bash
-# Primera ejecución: auto-discovery (1-2 minutos)
-python scrape_municipio.py "Arrecife" canarias 2027
-
-# Siguientes ejecuciones: usa cache (instantáneo)
-python scrape_municipio.py "Arrecife" canarias 2027
-```
-
-### BOE (Nacionales)
-
-Auto-discovery vía API del BOE:
-
-```python
-# Busca automáticamente la resolución oficial
-python -m scrapers.core.boe_scraper 2027
-```
-
-## 📊 Formato de Salida
-
-### JSON
-
+### JSON Output
 ```json
 {
-  "municipio": "Arrecife",
-  "ccaa": "Canarias",
-  "year": 2025,
-  "total_festivos": 14,
+  "municipio": "Sevilla",
+  "ccaa": "andalucia",
+  "year": 2026,
   "festivos": [
     {
-      "fecha": "2025-01-01",
+      "fecha": "2026-01-01",
       "descripcion": "Año Nuevo",
       "tipo": "nacional",
-      "ambito": "nacional",
       "sustituible": false
     },
-    ...
+    {
+      "fecha": "2026-04-22",
+      "descripcion": "Festivo local de Sevilla",
+      "tipo": "local",
+      "municipio": "Sevilla",
+      "provincia": "SEVILLA"
+    }
   ]
 }
 ```
 
-### Excel
+---
 
-Tabla con columnas:
-- Fecha
-- Descripción
-- Tipo (nacional/autonómico/local)
-- Ámbito
-- Sustituible
+## 🗺️ Roadmap
 
-## 🎨 Características Especiales
+### Próximas CCAA (En orden de prioridad)
 
-### Canarias: Filtrado por Isla
+- [ ] **Cataluña** (950 municipios) - DOGC
+- [ ] **Baleares** (67 municipios) - BOIB
+- [ ] **País Vasco** (251 municipios) - BOPV
+- [ ] **Galicia** (313 municipios) - DOG
+- [ ] **Castilla y León** (2,248 municipios) - BOCYL
+- [ ] Resto de España...
 
-Cada municipio de Canarias tiene:
-- 1 festivo regional (Día de Canarias - 30 mayo)
-- 1 festivo insular (específico de cada isla)
+### Features Planificadas
 
-```bash
-# Tenerife: Virgen de la Candelaria (2 febrero)
-python scrape_municipio.py "Santa Cruz de Tenerife" canarias 2025
+- [ ] Export a Google Calendar (ICS)
+- [ ] Integración con Bitrix24 API
+- [ ] Festivos personalizados de empresa
+- [ ] Comparador entre municipios
+- [ ] API REST pública
+- [ ] Histórico de festivos (2020-2030)
 
-# Gran Canaria: Virgen del Pino (8 septiembre)
-python scrape_municipio.py "Las Palmas de Gran Canaria" canarias 2025
-
-# Lanzarote: Virgen de los Volcanes (15 septiembre)
-python scrape_municipio.py "Arrecife" canarias 2025
-```
-
-### Gestión de Sustituciones
-
-El sistema maneja automáticamente festivos sustituidos:
-
-```python
-# Ejemplo: Canarias 2025
-# 12 octubre (domingo) → sustituido por 30 mayo
-# El sistema elimina el 12 octubre automáticamente
-```
-
-### Eliminación de Duplicados
-
-Cuando un festivo aparece en varias fuentes, se mantiene el de mayor prioridad:
-
-**Prioridad**: Local > Autonómico > Nacional
-
-Ejemplo:
-- 1 enero aparece en BOE (nacional) y BOCM (autonómico)
-- Se mantiene como "autonómico" (prioridad mayor)
-
-## 🛠️ Desarrollo
-
-### Añadir Nueva CCAA
-
-Ver [CONTRIBUTING.md](docs/CONTRIBUTING.md) para guía detallada.
-
-### Estructura de Clases
-
-```python
-from scrapers.core.base_scraper import BaseScraper
-
-class NuevaCCAAScraper(BaseScraper):
-    def get_source_url(self) -> str:
-        # Lógica para obtener URL
-        pass
-    
-    def parse_festivos(self, content: str) -> List[Dict]:
-        # Lógica para parsear festivos
-        pass
-```
-
-### Testing
-
-```bash
-# Test individual
-python -m scrapers.ccaa.canarias.locales "Arrecife" 2025
-
-# Test completo
-python scrape_municipio.py "Arrecife" canarias 2025
-```
-
-## 📝 Cache
-
-El sistema usa cache de 3 niveles:
-
-1. **KNOWN_URLS**: URLs hardcoded para años conocidos
-2. **Cache**: URLs descubiertas previamente
-3. **Auto-discovery**: Búsqueda automática (lento)
-
-Archivos de cache:
-- `config/boe_urls_cache.json`
-- `config/canarias_urls_cache.json`
-- `config/madrid_urls_cache.json`
+---
 
 ## 🤝 Contribuir
 
-Ver [CONTRIBUTING.md](docs/CONTRIBUTING.md)
+Las contribuciones son bienvenidas. Para añadir una nueva CCAA:
 
-## 📄 Licencia
+1. Crea el scraper en `scrapers/ccaa/nombre_ccaa/locales.py`
+2. Implementa auto-discovery en `scrapers/discovery/ccaa/`
+3. Añade municipios en `config/nombre_ccaa_municipios.json`
+4. Actualiza `CCAA_DISPONIBLES` en `app.py`
+5. Añade tests y documentación
 
-MIT License - ver [LICENSE](LICENSE)
+**Ver:** [CONTRIBUTING.md](CONTRIBUTING.md) para guía detallada
 
-## ✨ Créditos
+---
 
-Desarrollado por Pablo Biplaza
+## 📄 Fuentes Oficiales
 
-Fuentes oficiales:
-- BOE: https://www.boe.es
-- BOC Canarias: https://www.gobiernodecanarias.org/boc
-- BOCM Madrid: https://www.bocm.es
+- **Nacional:** [BOE](https://www.boe.es/) - Boletín Oficial del Estado
+- **Canarias:** [BOC](https://sede.gobcan.es/boc/) - Boletín Oficial de Canarias
+- **Madrid:** [BOCM](https://www.bocm.es/) - Boletín Oficial de la Comunidad de Madrid
+- **Andalucía:** [BOJA](https://www.juntadeandalucia.es/boja/) - Boletín Oficial de la Junta de Andalucía
+- **Valencia:** [DOGV](https://dogv.gva.es/) - Diari Oficial de la Generalitat Valenciana
+
+---
+
+## 📋 Requisitos
+
+- Python 3.9+
+- Dependencias: `streamlit`, `requests`, `beautifulsoup4`, `pypdf`, `pyyaml`, `pdfplumber`
+```bash
+pip install -r requirements.txt
+```
+
+---
+
+## 📜 Licencia
+
+MIT License - Ver [LICENSE](LICENSE) para más detalles
+
+---
+
+## 👨‍💻 Autor
+
+Desarrollado con ❤️ para facilitar la gestión de calendarios laborales en España.
+
+**¿Preguntas o sugerencias?** Abre un [issue](https://github.com/tu-usuario/calendario-laboral-espana/issues)
+
+---
+
+## ⭐ Stats
+
+![Municipios](https://img.shields.io/badge/Municipios-1555+-blue)
+![CCAA](https://img.shields.io/badge/CCAA-4%2F17-green)
+![Coverage](https://img.shields.io/badge/Cobertura-24%25-yellow)
+![Python](https://img.shields.io/badge/Python-3.9+-blue)
+![License](https://img.shields.io/badge/License-MIT-green)
