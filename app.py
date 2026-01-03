@@ -74,7 +74,7 @@ def cargar_municipios(ccaa: str):
 
 
 # Cargar municipios para CCAA disponibles
-CCAA_DISPONIBLES = ['canarias', 'madrid']  # ← Fácil añadir más
+CCAA_DISPONIBLES = ['canarias', 'madrid', 'andalucia']  # ← Fácil añadir más
 
 MUNICIPIOS = {
     ccaa: cargar_municipios(ccaa)
@@ -118,7 +118,7 @@ def main():
         # Selección de CCAA
         ccaa = st.selectbox(
             "Comunidad Autónoma",
-            options=['canarias', 'madrid'],
+            options=CCAA_DISPONIBLES,  # ← Usar la lista definida arriba
             format_func=lambda x: x.title()
         )
         
