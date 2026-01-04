@@ -75,7 +75,9 @@ class MadridLocalesScraper(BaseScraper):
             print(f"⚠️  No se pudo guardar en cache: {e}")
 
     def get_source_url(self) -> str:
-        """Devuelve URL del BOCM (con sistema de cache)"""
+        """Devuelve URL del BOCM (con sistema de cache y auto-discovery)"""
+        from scrapers.discovery.ccaa.madrid_discovery import auto_discover_madrid
+        
         year_str = str(self.year)
         
         # 1. KNOWN_URLS (oficial)
@@ -90,13 +92,25 @@ class MadridLocalesScraper(BaseScraper):
             print(f"📦 URL en cache para {self.year}: {url}")
             return url
         
-        # 3. Si no existe, dar instrucciones
+        # 3. Auto-discovery
+        print(f"🔍 Auto-discovery para {self.year} (no está en cache ni KNOWN_URLS)...")
+        
+        urls = auto_discover_madrid(self.year)
+        url_locales = urls.get('locales')
+        
+        if url_locales:
+            print(f"✅ URL encontrada por auto-discovery: {url_locales}")
+            # Guardar en cache
+            self._save_to_cache(year_str, url_locales)
+            return url_locales
+        
+        # 4. Si todo falla, dar instrucciones
         raise ValueError(
-            f"\n❌ No se encontró URL para {self.year}.\n\n"
-            f"Para añadirla:\n"
+            f"\n❌ No se pudo encontrar URL para {self.year}.\n\n"
+            f"Auto-discovery falló. Para añadir manualmente:\n"
             f"1. Busca en https://www.bocm.es 'fiestas locales {self.year}'\n"
             f"2. Encuentra la Resolución (publicada en dic {self.year-1})\n"
-            f"3. Añade la URL al cache ejecutando este scraper\n"
+            f"3. Añade la URL a KNOWN_URLS en el scraper\n"
         )
     
     def parse_festivos(self, content: str) -> List[Dict]:
