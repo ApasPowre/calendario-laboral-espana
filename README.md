@@ -10,10 +10,10 @@ Extrae festivos nacionales, autonómicos y locales desde fuentes oficiales (BOE,
 
 ## 🎯 Características
 
-✅ **4 Comunidades Autónomas** completas (Canarias, Madrid, Andalucía, Valencia)  
-✅ **1,555+ municipios** soportados con festivos exactos  
+✅ **5 Comunidades Autónomas** completas (Canarias, Madrid, Andalucía, Valencia, Baleares)  
+✅ **1,622+ municipios** soportados con festivos exactos  
 ✅ **14 festivos precisos** por municipio (8 nacionales + 4-6 autonómicos + 2 locales)  
-✅ **Auto-discovery** automático de URLs de boletines oficiales  
+✅ **Auto-discovery** automático de URLs de boletines oficiales (60% CCAA)  
 ✅ **Parsing inteligente** de HTML, PDF y YAML  
 ✅ **Generación de PDF** para imprimir con branding personalizable  
 ✅ **Deploy en Streamlit Cloud** - acceso público y gratuito  
@@ -24,13 +24,14 @@ Extrae festivos nacionales, autonómicos y locales desde fuentes oficiales (BOE,
 
 | CCAA | Municipios | Provincias/Islas | Fuente Oficial | Auto-discovery |
 |------|------------|------------------|----------------|----------------|
-| **Canarias** | 88 | 2 islas principales | BOC | ❌ |
+| **Canarias** | 88 | 2 islas principales | BOC | ✅ |
 | **Madrid** | 181 | 1 provincia | BOCM | ❌ |
 | **Andalucía** | 746 | 8 provincias | BOJA | ✅ |
 | **Valencia** | 540+ | 3 provincias | DOGV | ✅ |
-| **TOTAL** | **1,555+** | **14** | - | **50%** |
+| **Baleares** | 67 | 4 islas | CAIB | ❌ (URLs predecibles) |
+| **TOTAL** | **1,622+** | **18** | - | **60%** |
 
-**Progreso:** 4/17 CCAA (24% de España)
+**Progreso:** 5/17 CCAA (29% de España)
 
 ---
 
@@ -60,7 +61,7 @@ source venv/bin/activate  # En Windows: venv\Scripts\activate
 pip install -r requirements.txt
 
 # Generar calendario para un municipio
-python scrape_municipio.py "SEVILLA" andalucia 2026
+python scrape_municipio.py "PALMA" baleares 2026
 
 # Iniciar la app local
 streamlit run app.py
@@ -85,17 +86,20 @@ scrapers/
 │   │   └── locales.py        # BOCM - PDF parsing
 │   ├── andalucia/
 │   │   └── locales.py        # BOJA - HTML secuencial
-│   └── valencia/
-│       └── locales.py        # DOGV - PDF multiidioma
+│   ├── valencia/
+│   │   └── locales.py        # DOGV - PDF multiidioma
+│   └── baleares/
+│       └── locales.py        # CAIB - HTML tablas por islas
 └── discovery/
     └── ccaa/
+        ├── canarias_discovery.py   # Auto-discovery BOC
         ├── andalucia_discovery.py  # Auto-discovery BOJA
         └── valencia_discovery.py   # Auto-discovery DOGV
 ```
 
 ### Auto-discovery Inteligente
 
-Los scrapers de Andalucía y Valencia incluyen **auto-discovery** que:
+Los scrapers de Canarias, Andalucía y Valencia incluyen **auto-discovery** que:
 
 1. 🔍 Busca automáticamente en páginas oficiales
 2. 📋 Extrae signaturas y enlaces
@@ -109,6 +113,7 @@ Los scrapers de Andalucía y Valencia incluyen **auto-discovery** que:
 - **PDF:** pypdf con extracción de texto y validación de estructura
 - **YAML:** Safe loading con manejo de encoding UTF-8
 - **Formatos complejos:** Regex adaptativo para "14y17deagosto", "27 y 28 de agosto"
+- **Tablas HTML:** Extracción estructurada por islas/provincias
 
 ---
 
@@ -119,45 +124,46 @@ Los scrapers de Andalucía y Valencia incluyen **auto-discovery** que:
 Calendario generado: 14 festivos
 
 ┌─────────────────────────────────────────┐
-│  CALENDARIO LABORAL 2026 - SEVILLA      │
+│  CALENDARIO LABORAL 2026 - PALMA        │
+│  Baleares - Mallorca                    │
 └─────────────────────────────────────────┘
 
 📅 FESTIVOS:
    2026-01-01 - [NACIONAL   ] Año Nuevo
    2026-01-06 - [NACIONAL   ] Epifanía del Señor
-   2026-02-28 - [AUTONOMICO ] Día de Andalucía
+   2026-01-20 - [LOCAL      ] San Sebastián
+   2026-03-02 - [AUTONOMICO ] Lunes siguiente al Día de les Illes Balears
    2026-04-02 - [AUTONOMICO ] Jueves Santo
    2026-04-03 - [NACIONAL   ] Viernes Santo
-   2026-04-22 - [LOCAL      ] Festivo local de Sevilla
+   2026-04-06 - [AUTONOMICO ] Lunes de Pascua
    2026-05-01 - [NACIONAL   ] Fiesta del Trabajo
-   2026-06-04 - [LOCAL      ] Festivo local de Sevilla
+   2026-06-24 - [LOCAL      ] San Juan
    2026-08-15 - [NACIONAL   ] Asunción de la Virgen
    2026-10-12 - [NACIONAL   ] Fiesta Nacional de España
-   2026-11-02 - [AUTONOMICO ] Día siguiente a Todos los Santos
-   2026-12-07 - [AUTONOMICO ] Lunes siguiente al Día de la Constitución
    2026-12-08 - [NACIONAL   ] Inmaculada Concepción
    2026-12-25 - [NACIONAL   ] Natividad del Señor
+   2026-12-26 - [AUTONOMICO ] San Esteban
 ```
 
 ### JSON Output
 ```json
 {
-  "municipio": "Sevilla",
-  "ccaa": "andalucia",
+  "municipio": "Palma",
+  "ccaa": "baleares",
+  "isla": "Mallorca",
   "year": 2026,
   "festivos": [
     {
       "fecha": "2026-01-01",
       "descripcion": "Año Nuevo",
-      "tipo": "nacional",
-      "sustituible": false
+      "tipo": "nacional"
     },
     {
-      "fecha": "2026-04-22",
-      "descripcion": "Festivo local de Sevilla",
+      "fecha": "2026-01-20",
+      "descripcion": "San Sebastián",
       "tipo": "local",
-      "municipio": "Sevilla",
-      "provincia": "SEVILLA"
+      "municipio": "Palma",
+      "isla": "Mallorca"
     }
   ]
 }
@@ -169,11 +175,11 @@ Calendario generado: 14 festivos
 
 ### Próximas CCAA (En orden de prioridad)
 
-- [ ] **Cataluña** (950 municipios) - DOGC
-- [ ] **Baleares** (67 municipios) - BOIB
+- [ ] **Cataluña** (~950 municipios) - DOGC
 - [ ] **País Vasco** (251 municipios) - BOPV
 - [ ] **Galicia** (313 municipios) - DOG
 - [ ] **Castilla y León** (2,248 municipios) - BOCYL
+- [ ] **Aragón** (731 municipios) - BOA
 - [ ] Resto de España...
 
 ### Features Planificadas
@@ -192,7 +198,7 @@ Calendario generado: 14 festivos
 Las contribuciones son bienvenidas. Para añadir una nueva CCAA:
 
 1. Crea el scraper en `scrapers/ccaa/nombre_ccaa/locales.py`
-2. Implementa auto-discovery en `scrapers/discovery/ccaa/`
+2. Implementa auto-discovery en `scrapers/discovery/ccaa/` (opcional)
 3. Añade municipios en `config/nombre_ccaa_municipios.json`
 4. Actualiza `CCAA_DISPONIBLES` en `app.py`
 5. Añade tests y documentación
@@ -208,6 +214,7 @@ Las contribuciones son bienvenidas. Para añadir una nueva CCAA:
 - **Madrid:** [BOCM](https://www.bocm.es/) - Boletín Oficial de la Comunidad de Madrid
 - **Andalucía:** [BOJA](https://www.juntadeandalucia.es/boja/) - Boletín Oficial de la Junta de Andalucía
 - **Valencia:** [DOGV](https://dogv.gva.es/) - Diari Oficial de la Generalitat Valenciana
+- **Baleares:** [CAIB](https://www.caib.es/sites/calendarilaboral/) - Govern de les Illes Balears
 
 ---
 
@@ -237,8 +244,8 @@ Desarrollado con ❤️ para facilitar la gestión de calendarios laborales en E
 
 ## ⭐ Stats
 
-![Municipios](https://img.shields.io/badge/Municipios-1555+-blue)
-![CCAA](https://img.shields.io/badge/CCAA-4%2F17-green)
-![Coverage](https://img.shields.io/badge/Cobertura-24%25-yellow)
+![Municipios](https://img.shields.io/badge/Municipios-1622+-blue)
+![CCAA](https://img.shields.io/badge/CCAA-5%2F17-green)
+![Coverage](https://img.shields.io/badge/Cobertura-29%25-yellow)
 ![Python](https://img.shields.io/badge/Python-3.9+-blue)
 ![License](https://img.shields.io/badge/License-MIT-green)
