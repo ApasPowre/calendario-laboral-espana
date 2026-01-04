@@ -13,7 +13,7 @@ Extrae festivos nacionales, autonómicos y locales desde fuentes oficiales (BOE,
 ✅ **5 Comunidades Autónomas** completas (Canarias, Madrid, Andalucía, Valencia, Baleares)  
 ✅ **1,622+ municipios** soportados con festivos exactos  
 ✅ **14 festivos precisos** por municipio (8 nacionales + 4-6 autonómicos + 2 locales)  
-✅ **Auto-discovery** automático de URLs de boletines oficiales (60% CCAA)  
+✅ **Auto-discovery** automático de URLs de boletines oficiales (80% CCAA)  
 ✅ **Parsing inteligente** de HTML, PDF y YAML  
 ✅ **Generación de PDF** para imprimir con branding personalizable  
 ✅ **Deploy en Streamlit Cloud** - acceso público y gratuito  
@@ -25,11 +25,11 @@ Extrae festivos nacionales, autonómicos y locales desde fuentes oficiales (BOE,
 | CCAA | Municipios | Provincias/Islas | Fuente Oficial | Auto-discovery |
 |------|------------|------------------|----------------|----------------|
 | **Canarias** | 88 | 2 islas principales | BOC | ✅ |
-| **Madrid** | 181 | 1 provincia | BOCM | ❌ |
+| **Madrid** | 181 | 1 provincia | BOCM | ✅ |
 | **Andalucía** | 746 | 8 provincias | BOJA | ✅ |
 | **Valencia** | 540+ | 3 provincias | DOGV | ✅ |
 | **Baleares** | 67 | 4 islas | CAIB | ❌ (URLs predecibles) |
-| **TOTAL** | **1,622+** | **18** | - | **60%** |
+| **TOTAL** | **1,622+** | **18** | - | **80%** |
 
 **Progreso:** 5/17 CCAA (29% de España)
 
@@ -93,13 +93,14 @@ scrapers/
 └── discovery/
     └── ccaa/
         ├── canarias_discovery.py   # Auto-discovery BOC
+        ├── madrid_discovery.py     # Auto-discovery BOCM
         ├── andalucia_discovery.py  # Auto-discovery BOJA
         └── valencia_discovery.py   # Auto-discovery DOGV
 ```
 
 ### Auto-discovery Inteligente
 
-Los scrapers de Canarias, Andalucía y Valencia incluyen **auto-discovery** que:
+Los scrapers de Canarias, Madrid, Andalucía y Valencia incluyen **auto-discovery** que:
 
 1. 🔍 Busca automáticamente en páginas oficiales
 2. 📋 Extrae signaturas y enlaces
