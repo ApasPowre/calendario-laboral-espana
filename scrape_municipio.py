@@ -27,6 +27,14 @@ def scrape_festivos_completos(municipio: str, ccaa: str, year: int) -> Dict:
     print(f"🗓️  CALENDARIO LABORAL COMPLETO - {municipio.upper()}, {ccaa.upper()} {year}")
     print("=" * 80)
     print()
+
+    # Normalizar el nombre del municipio para mejorar las búsquedas
+    from utils.normalizer import normalize_municipio
+    municipio_normalizado = normalize_municipio(municipio)
+    
+    if municipio_normalizado != municipio:
+        print(f"📝 Municipio normalizado: '{municipio}' -> '{municipio_normalizado}'")
+        municipio = municipio_normalizado
     
     festivos_todos = []
     

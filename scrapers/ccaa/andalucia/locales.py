@@ -19,7 +19,34 @@ class AndaluciaLocalesScraper(BaseScraper):
     
     def __init__(self, year: int, municipio: Optional[str] = None):
         super().__init__(year=year, ccaa='andalucia', tipo='locales')
-        self.municipio = municipio
+        
+        # Si se especifica municipio, hacer fuzzy matching UNA VEZ contra la lista de municipios
+        if municipio:
+            import json
+            from utils.normalizer import find_municipio
+            
+            # Cargar todos los municipios de Andalucía
+            with open('config/andalucia_municipios.json', 'r', encoding='utf-8') as f:
+                provincias_data = json.load(f)
+            
+            # Crear lista plana de todos los municipios Y normalizarlos
+            from utils.normalizer import normalize_municipio
+            todos_municipios = []
+            for munis in provincias_data.values():
+                # Normalizar cada municipio (resuelve "Ejido, el" → "El Ejido")
+                todos_municipios.extend([normalize_municipio(m) for m in munis])
+            
+            # Buscar el mejor match
+            mejor_match = find_municipio(municipio, todos_municipios, threshold=80)
+            
+            if mejor_match:
+                self.municipio = mejor_match
+                if mejor_match.lower() != municipio.lower():
+                    print(f"   🔍 Fuzzy match: '{municipio}' → '{mejor_match}'")
+            else:
+                self.municipio = municipio
+        else:
+            self.municipio = None
     
     def get_source_url(self) -> str:
         """Devuelve la URL del BOJA para el año especificado"""
@@ -96,12 +123,24 @@ class AndaluciaLocalesScraper(BaseScraper):
                 
                 # Si se especificó un municipio, filtrar
                 if self.municipio:
-                    municipio_busqueda = self._normalizar_municipio(self.municipio).replace(' ', '').lower()
-                    municipio_encontrado = nombre_municipio_normalizado.replace(' ', '').lower()
+                    # Intento 1: Comparación exacta normalizada (rápido)
+                    municipio_busqueda = self._normalizar_municipio(self.municipio).lower()
+                    municipio_encontrado = self._normalizar_municipio(nombre_municipio).lower()
                     
-                    if municipio_busqueda != municipio_encontrado:
-                        i += 1
-                        continue
+                    if municipio_busqueda == municipio_encontrado:
+                        # Match exacto, continuar procesando
+                        pass
+                    else:
+                        # Intento 2: Fuzzy matching (más lento pero flexible)
+                        from utils.normalizer import MunicipioNormalizer
+                        
+                        if not MunicipioNormalizer.are_equivalent(
+                            self.municipio, 
+                            nombre_municipio, 
+                            threshold=85
+                        ):
+                            i += 1
+                            continue  # No hace match, saltar este municipio
                 
                 # Las dos líneas siguientes deberían ser las fechas
                 if i + 2 < len(lineas):
