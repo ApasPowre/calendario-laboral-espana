@@ -25,8 +25,33 @@ class CanariasLocalesScraper(BaseScraper):
 
     def __init__(self, year: int, municipio: str = None):
         super().__init__(year=year, ccaa='canarias', tipo='locales')
-        self.municipio = municipio
         self._load_cache()
+        
+        # Si se especifica municipio, hacer fuzzy matching UNA VEZ contra la lista de municipios
+        if municipio:
+            import json
+            from utils.normalizer import find_municipio
+            
+            # Cargar todos los municipios de Canarias
+            with open('config/canarias_municipios_islas.json', 'r', encoding='utf-8') as f:
+                islas_data = json.load(f)
+            
+            # Crear lista plana de todos los municipios
+            todos_municipios = []
+            for munis in islas_data.values():
+                todos_municipios.extend(munis)
+            
+            # Buscar el mejor match
+            mejor_match = find_municipio(municipio, todos_municipios, threshold=80)
+            
+            if mejor_match:
+                self.municipio = mejor_match
+                if mejor_match.lower() != municipio.lower():
+                    print(f"   🔍 Fuzzy match: '{municipio}' → '{mejor_match}'")
+            else:
+                self.municipio = municipio
+        else:
+            self.municipio = None
     
     def _load_cache(self):
         """Carga URLs del cache"""

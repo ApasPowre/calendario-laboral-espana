@@ -21,7 +21,33 @@ class ValenciaLocalesScraper(BaseScraper):
     
     def __init__(self, year: int, municipio: Optional[str] = None):
         super().__init__(year=year, ccaa='valencia', tipo='locales')
-        self.municipio = municipio
+        
+        # Si se especifica municipio, hacer fuzzy matching UNA VEZ contra la lista de municipios
+        if municipio:
+            import json
+            from utils.normalizer import find_municipio
+            
+            # Cargar todos los municipios de Valencia
+            with open('config/valencia_municipios.json', 'r', encoding='utf-8') as f:
+                provincias_data = json.load(f)
+            
+            # Crear lista plana de todos los municipios
+            todos_municipios = []
+            for munis in provincias_data.values():
+                if isinstance(munis, list):
+                    todos_municipios.extend(munis)
+            
+            # Buscar el mejor match
+            mejor_match = find_municipio(municipio, todos_municipios, threshold=80)
+            
+            if mejor_match:
+                self.municipio = mejor_match
+                if mejor_match.lower() != municipio.lower():
+                    print(f"   🔍 Fuzzy match: '{municipio}' → '{mejor_match}'")
+            else:
+                self.municipio = municipio
+        else:
+            self.municipio = None
     
     def get_source_url(self) -> str:
         """Devuelve la URL del DOGV para el año especificado"""
@@ -94,7 +120,7 @@ class ValenciaLocalesScraper(BaseScraper):
         festivos = []
         
         # Patrón: MUNICIPIO en mayúsculas seguido de ":"
-        patron_municipio = r'^([A-ZÁÉÍÓÚÑÜ\',\s]+):\s*(.+)'
+        patron_municipio = r'^([A-ZÁÉÍÓÚÑÜÀÈÌÒÙ\',\s]+):\s*(.+)'
         
         i = 0
         while i < len(lineas):

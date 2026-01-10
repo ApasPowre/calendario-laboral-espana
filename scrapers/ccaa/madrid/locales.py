@@ -30,8 +30,28 @@ class MadridLocalesScraper(BaseScraper):
             municipio: Municipio específico (None = todos)
         """
         super().__init__(year=year, ccaa='madrid', tipo='locales')
-        self.municipio = municipio
         self._load_cache()
+        
+        # Si se especifica municipio, hacer fuzzy matching UNA VEZ contra la lista de municipios
+        if municipio:
+            import json
+            from utils.normalizer import find_municipio
+            
+            # Cargar todos los municipios de Madrid
+            with open('config/madrid_municipios.json', 'r', encoding='utf-8') as f:
+                municipios_data = json.load(f)
+            
+            # Buscar el mejor match
+            mejor_match = find_municipio(municipio, municipios_data, threshold=80)
+            
+            if mejor_match:
+                self.municipio = mejor_match
+                if mejor_match.lower() != municipio.lower():
+                    print(f"   🔍 Fuzzy match: '{municipio}' → '{mejor_match}'")
+            else:
+                self.municipio = municipio
+        else:
+            self.municipio = None
     
     def _load_cache(self):
         """Carga URLs del cache"""

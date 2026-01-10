@@ -189,25 +189,30 @@ class MunicipioNormalizer:
         
         # Normalizar query para búsqueda
         query_normalized = cls.normalize_search(query)
-        
+
+        # Normalizar TODOS los candidatos también
+        candidates_normalized = [cls.normalize_search(c) for c in candidates]
+
         if RAPIDFUZZ_AVAILABLE:
             # Usar rapidfuzz (más rápido y preciso)
             results = process.extract(
                 query_normalized,
-                candidates,
+                candidates_normalized,
                 scorer=fuzz.ratio,
                 limit=limit
             )
+            # Devolver los candidatos ORIGINALES, no los normalizados
+            return [(candidates[candidates_normalized.index(match[0])], match[1]) for match in results if match[1] >= threshold]
             # Filtrar por threshold
             return [(match[0], match[1]) for match in results if match[1] >= threshold]
         else:
             # Fallback a difflib
             scores = []
-            for candidate in candidates:
+            for i, candidate in enumerate(candidates):
                 candidate_normalized = cls.normalize_search(candidate)
                 score = int(SequenceMatcher(None, query_normalized, candidate_normalized).ratio() * 100)
                 if score >= threshold:
-                    scores.append((candidate, score))
+                    scores.append((candidate, score))  # candidate original, no normalizado
             
             # Ordenar por score descendente
             scores.sort(key=lambda x: x[1], reverse=True)
