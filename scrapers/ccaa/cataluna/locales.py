@@ -31,7 +31,32 @@ class CatalunaLocalesScraper(BaseScraper):
     
     def __init__(self, year: int, municipio: Optional[str] = None):
         super().__init__(year=year, ccaa='cataluna', tipo='locales')
-        self.municipio = municipio
+        
+        # Si se especifica municipio, hacer fuzzy matching UNA VEZ contra la lista de municipios
+        if municipio:
+            import json
+            from utils.normalizer import find_municipio
+            
+            # Cargar todos los municipios de Cataluña
+            with open('config/cataluna_municipios.json', 'r', encoding='utf-8') as f:
+                comarcas_data = json.load(f)
+            
+            # Crear lista plana de todos los municipios
+            todos_municipios = []
+            for munis in comarcas_data.values():
+                todos_municipios.extend(munis)
+            
+            # Buscar el mejor match
+            mejor_match = find_municipio(municipio, todos_municipios, threshold=80)
+            
+            if mejor_match:
+                self.municipio = mejor_match
+                if mejor_match.lower() != municipio.lower():
+                    print(f"   🔍 Fuzzy match: '{municipio}' → '{mejor_match}'")
+            else:
+                self.municipio = municipio
+        else:
+            self.municipio = None
     
     def get_source_url(self) -> str:
         """Construye la URL del XML del DOGC para el año especificado"""
