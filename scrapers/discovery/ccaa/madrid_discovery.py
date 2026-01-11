@@ -1,70 +1,85 @@
 """
-Auto-discovery para BOCM Madrid scrapeando resultados de búsqueda
+Auto-discovery para BOCM Madrid usando búsqueda avanzada
 """
 
 import requests
 from bs4 import BeautifulSoup
 from typing import Optional, Dict
-import re
+from urllib.parse import urlencode
+import pdfplumber
+from io import BytesIO
 
 
-def scrapear_resultados_bocm(year_publicacion: int, keywords: list) -> Optional[str]:
+def buscar_en_bocm(year_publicacion: int, keywords: str, validar_contenido: list) -> Optional[str]:
     """
-    Scrapea resultados del buscador avanzado del BOCM
+    Busca documentos en el BOCM usando el buscador avanzado
     
     Args:
         year_publicacion: Año de publicación
-        keywords: Palabras clave a buscar en resultados
+        keywords: Palabras clave para la búsqueda
+        validar_contenido: Lista de palabras que deben aparecer en el PDF
         
     Returns:
         URL del PDF encontrado o None
     """
     
-    # Construir URL del buscador (simplificada)
-    # Buscar "fiestas laborales" en año específico
-    url_busqueda = f"https://www.bocm.es/advanced-search/p/field_buletin_field_date_y_hidden/year__{year_publicacion}"
+    # Construir URL de búsqueda con parámetros
+    params = {
+        'search_api_views_fulltext_1': keywords,
+        'field_bulletin_field_date_y_hidden[year]': str(year_publicacion),
+    }
+    
+    url_busqueda = "https://www.bocm.es/advanced-search?" + urlencode(params)
     
     try:
-        print(f"   📡 Consultando: {url_busqueda}")
+        print(f"   📡 Buscando: '{keywords}' en {year_publicacion}")
         
         response = requests.get(url_busqueda, timeout=15)
         
         if response.status_code != 200:
-            print(f"   ⚠️  Status code: {response.status_code}")
             return None
         
         soup = BeautifulSoup(response.text, 'html.parser')
         
-        # Buscar en todos los resultados
-        # Los resultados suelen estar en divs o artículos con clase específica
-        resultados = soup.find_all(['div', 'article', 'li'], class_=re.compile(r'resultado|result|item|entry'))
+        # Extraer resultados (divs con clase views-row)
+        resultados = soup.find_all('div', class_='views-row')
         
-        if not resultados:
-            # Intentar encontrar todos los enlaces
-            resultados = soup.find_all('a', href=True)
+        print(f"   📋 {len(resultados)} resultados encontrados")
         
-        for resultado in resultados:
-            texto = resultado.get_text().lower()
+        # Probar cada resultado
+        for i, resultado in enumerate(resultados[:10], 1):  # Máximo 10
+            # Buscar enlace al PDF
+            pdf_link = resultado.find('a', href=lambda x: x and '.PDF' in x)
             
-            # Verificar que contenga todas las keywords
-            if all(kw.lower() in texto for kw in keywords):
-                # Buscar enlace al PDF
-                link = resultado.find('a', href=re.compile(r'\.PDF|\.pdf'))
+            if not pdf_link:
+                continue
+            
+            pdf_url = pdf_link['href']
+            
+            # Validar contenido del PDF
+            try:
+                pdf_r = requests.get(pdf_url, timeout=10)
                 
-                if not link:
-                    link = resultado if resultado.name == 'a' else resultado.find('a')
+                if pdf_r.status_code != 200:
+                    continue
                 
-                if link and 'href' in link.attrs:
-                    href = link['href']
+                # Extraer texto de las primeras páginas
+                with pdfplumber.open(BytesIO(pdf_r.content)) as pdf:
+                    texto = ""
+                    for page in pdf.pages[:3]:
+                        texto += page.extract_text()
                     
-                    # Construir URL completa
-                    if href.startswith('http'):
-                        return href
-                    elif href.startswith('/'):
-                        return f"https://www.bocm.es{href}"
-                    else:
-                        return f"https://www.bocm.es/{href}"
+                    texto_upper = texto.upper()
+                    
+                    # Verificar que contenga todas las palabras de validación
+                    if all(palabra.upper() in texto_upper for palabra in validar_contenido):
+                        print(f"   ✅ Encontrado: {pdf_url}")
+                        return pdf_url
+                        
+            except Exception as e:
+                continue
         
+        print(f"   ❌ No se encontró documento válido")
         return None
         
     except Exception as e:
@@ -74,7 +89,7 @@ def scrapear_resultados_bocm(year_publicacion: int, keywords: list) -> Optional[
 
 def buscar_orden_autonomicos(year: int) -> Optional[str]:
     """
-    Busca festivos autonómicos en el BOCM
+    Busca Decreto de festivos autonómicos en el BOCM
     
     Args:
         year: Año objetivo (ej: 2026)
@@ -83,35 +98,22 @@ def buscar_orden_autonomicos(year: int) -> Optional[str]:
         URL del PDF o None
     """
     
+    print(f"🔍 Buscando Decreto autonómicos Madrid {year}...")
+    
     year_publicacion = year - 1
     
-    print(f"🔍 Buscando Decreto autonómicos Madrid {year}...")
-    print(f"   📅 Año de publicación: {year_publicacion}")
+    # Buscar decreto de fiestas laborales
+    keywords = f'decreto fiestas laborales {year}'
+    validar = [str(year), 'decreto', 'fiestas', 'laborales', 'comunidad']
     
-    # Keywords específicos
-    keywords = ['fiestas', 'laborales', str(year), 'decreto']
+    url = buscar_en_bocm(year_publicacion, keywords, validar)
     
-    url = scrapear_resultados_bocm(year_publicacion, keywords)
-    
-    if url:
-        print(f"   ✅ Encontrado")
-        return url
-    
-    # Si no encontrado, probar búsqueda más amplia
-    keywords = ['fiestas', 'laborales', str(year)]
-    url = scrapear_resultados_bocm(year_publicacion, keywords)
-    
-    if url:
-        print(f"   ✅ Encontrado (búsqueda amplia)")
-        return url
-    
-    print(f"   ❌ No encontrado")
-    return None
+    return url
 
 
 def buscar_orden_locales(year: int) -> Optional[str]:
     """
-    Busca festivos locales en el BOCM
+    Busca Resolución de festivos locales en el BOCM
     
     Args:
         year: Año objetivo (ej: 2026)
@@ -120,27 +122,22 @@ def buscar_orden_locales(year: int) -> Optional[str]:
         URL del PDF o None
     """
     
+    print(f"🔍 Buscando Resolución locales Madrid {year}...")
+    
     year_publicacion = year - 1
     
-    print(f"🔍 Buscando Resolución locales Madrid {year}...")
-    print(f"   📅 Año de publicación: {year_publicacion}")
+    # Buscar orden/resolución de fiestas locales
+    keywords = f'festivos locales {year}'
+    validar = [str(year), 'locales', 'fiestas', 'madrid']
     
-    # Keywords específicos
-    keywords = ['fiestas', 'locales', str(year)]
+    url = buscar_en_bocm(year_publicacion, keywords, validar)
     
-    url = scrapear_resultados_bocm(year_publicacion, keywords)
-    
-    if url:
-        print(f"   ✅ Encontrado")
-        return url
-    
-    print(f"   ❌ No encontrado")
-    return None
+    return url
 
 
 def auto_discover_madrid(year: int) -> Dict[str, Optional[str]]:
     """
-    Descubre automáticamente las URLs para Madrid
+    Descubre automáticamente las URLs para Madrid (paralelizado)
     
     Returns:
         Dict con 'autonomicos' y 'locales' URLs
@@ -150,7 +147,6 @@ def auto_discover_madrid(year: int) -> Dict[str, Optional[str]]:
     print(f"🔎 AUTO-DISCOVERY BOCM MADRID {year}")
     print("=" * 80)
     
-    # Paralelizar búsquedas de autonómicos y locales
     from concurrent.futures import ThreadPoolExecutor, as_completed
     import time
     
@@ -158,11 +154,9 @@ def auto_discover_madrid(year: int) -> Dict[str, Optional[str]]:
     urls = {'autonomicos': None, 'locales': None}
     
     with ThreadPoolExecutor(max_workers=2) as executor:
-        # Lanzar ambas búsquedas en paralelo
         future_autonomicos = executor.submit(buscar_orden_autonomicos, year)
         future_locales = executor.submit(buscar_orden_locales, year)
         
-        # Recoger resultados
         for future in as_completed([future_autonomicos, future_locales]):
             try:
                 if future == future_autonomicos:
@@ -170,7 +164,7 @@ def auto_discover_madrid(year: int) -> Dict[str, Optional[str]]:
                 else:
                     urls['locales'] = future.result()
             except Exception as e:
-                print(f"   ⚠️  Error en búsqueda: {e}")
+                print(f"   ⚠️  Error: {e}")
     
     elapsed = time.time() - start_time
     
