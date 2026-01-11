@@ -14,13 +14,6 @@ from scrapers.core.base_scraper import BaseScraper
 class BalearesLocalesScraper(BaseScraper):
     """Scraper para festivos locales de Baleares"""
     
-    KNOWN_URLS = {
-        2026: "https://www.caib.es/sites/calendarilaboral/es/aao_2026/",
-        2025: "https://www.caib.es/sites/calendarilaboral/es/aao_2025/",
-        2024: "https://www.caib.es/sites/calendarilaboral/es/aao_2024/",
-        # El patrón es predecible: cambiar el año en la URL
-    }
-    
     def __init__(self, year: int, municipio: Optional[str] = None):
         super().__init__(year=year, ccaa='baleares', tipo='locales')
         
@@ -52,10 +45,7 @@ class BalearesLocalesScraper(BaseScraper):
     
     def get_source_url(self) -> str:
         """Devuelve la URL de la página oficial para el año especificado"""
-        if self.year in self.KNOWN_URLS:
-            return self.KNOWN_URLS[self.year]
-        
-        # Si no está en KNOWN_URLS, construir URL basándose en el patrón
+        # URL predecible basada en el año
         return f"https://www.caib.es/sites/calendarilaboral/es/aao_{self.year}/"
     
     def parse_festivos(self, content: str) -> List[Dict]:
