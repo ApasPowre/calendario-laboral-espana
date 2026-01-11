@@ -446,6 +446,8 @@ class BOEScraper(BaseScraper):
             if ccaa_filtro:
                 if ccaa_filtro.lower() not in ccaa_aplicables:
                     continue  # Este festivo no aplica a la CCAA solicitada
+                # Si filtramos, solo queremos esta CCAA específica
+                ccaa_aplicables = [ccaa_filtro.lower()]
             
             # Crear festivo(s)
             if tipo_festivo == 'nacional':
