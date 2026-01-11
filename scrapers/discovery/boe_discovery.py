@@ -210,38 +210,43 @@ class BOEAutoDiscovery:
     
     def _search_in_json(self, data: dict, year: int) -> Optional[str]:
         """
-        Busca el documento en el JSON del sumario
-        Enfoque simple: busca en el JSON completo como string
+        Busca el documento en el JSON del sumario iterando el diccionario nativo.
+        Mucho más eficiente que convertir a string y usar regex.
         """
-        try:
-            # Convertir todo el JSON a string lowercase
-            json_str = json.dumps(data, ensure_ascii=False).lower()
-            
-            # Buscar "fiestas laborales" + año
-            if 'fiestas laborales' not in json_str or str(year) not in json_str:
-                return None
-            
-            # Encontrar todas las ocurrencias de IDs BOE
-            pattern = r'"identificador"\s*:\s*"(boe-a-\d{4}-\d{5})"'
-            matches = re.findall(pattern, json_str)
-            
-            # Para cada ID encontrado, verificar si su contexto habla de festivos
-            for boe_id in matches:
-                # Buscar el contexto alrededor de este ID (±500 chars)
-                idx = json_str.find(f'"{boe_id}"')
-                if idx == -1:
-                    continue
+        def buscar_recursivo(obj, year_str):
+            """Busca recursivamente en el objeto JSON"""
+            # Si es un diccionario
+            if isinstance(obj, dict):
+                # Verificar si este objeto tiene identificador y título
+                identificador = obj.get('identificador', '').upper()
+                titulo = obj.get('titulo', '').lower()
                 
-                context = json_str[max(0, idx-500):min(len(json_str), idx+500)]
+                # Verificar patrón BOE-A-YYYY-XXXXX
+                if identificador.startswith('BOE-A-'):
+                    # Verificar que el título contenga "fiestas laborales" y el año
+                    if 'fiestas laborales' in titulo and year_str in titulo:
+                        # Verificar tipo de documento (resolución o relación)
+                        if 'resolución' in titulo or 'relación' in titulo:
+                            return identificador
                 
-                # Verificar que en ese contexto está "fiestas laborales" + año
-                if 'fiestas laborales' in context and str(year) in context:
-                    # Verificar que sea resolución/relación
-                    if 'resolución' in context or 'relación' in context:
-                        return boe_id.upper()
+                # Buscar recursivamente en todos los valores
+                for value in obj.values():
+                    result = buscar_recursivo(value, year_str)
+                    if result:
+                        return result
+            
+            # Si es una lista, buscar en cada elemento
+            elif isinstance(obj, list):
+                for item in obj:
+                    result = buscar_recursivo(item, year_str)
+                    if result:
+                        return result
             
             return None
-            
+        
+        try:
+            year_str = str(year)
+            return buscar_recursivo(data, year_str)
         except Exception:
             return None
     
