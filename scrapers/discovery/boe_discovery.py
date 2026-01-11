@@ -118,16 +118,39 @@ class BOEAutoDiscovery:
     
     def _try_auto_discovery(self, year: int) -> Optional[str]:
         """
-        Intenta auto-discovery usando la API del BOE
+        Intenta auto-discovery usando la API del BOE (paralelizado)
         Busca en TODOS los días de septiembre-diciembre del año anterior
         """
         try:
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+            
             search_year = year - 1
             
-            print(f"   🔍 Buscando en API del BOE (sept-dic {search_year})...")
-            print(f"   ⏱️  Esto puede tardar ~30-60 segundos...")
+            print(f"   🔍 Buscando en API del BOE (sept-dic {search_year}) con paralelismo...")
+            print(f"   ⏱️  Búsqueda paralelizada activada...")
             
-            # Buscar en TODOS los días de septiembre a diciembre
+            # Función worker para buscar un día específico
+            def buscar_dia(fecha_tuple):
+                year_search, mes, dia = fecha_tuple
+                fecha = f"{year_search}{mes:02d}{dia:02d}"
+                api_url = f"{self.api_url}/boe/sumario/{fecha}"
+                
+                try:
+                    response = requests.get(api_url, timeout=5, headers={'Accept': 'application/json'})
+                    if response.status_code != 200:
+                        return None
+                    
+                    data = response.json()
+                    doc_id = self._search_in_json(data, year)
+                    
+                    if doc_id:
+                        return (fecha, f"{self.base_url}/diario_boe/txt.php?id={doc_id}")
+                    
+                    return None
+                except:
+                    return None
+            
+            # Buscar en TODOS los días de septiembre a diciembre (paralelizado)
             for mes in [9, 10, 11, 12]:  # Sept, Oct, Nov, Dic
                 # Determinar días del mes
                 if mes == 2:
@@ -137,27 +160,21 @@ class BOEAutoDiscovery:
                 else:
                     max_day = 31
                 
-                print(f"   → Buscando en {search_year}/{mes:02d}...", end=" ", flush=True)
+                print(f"   → Buscando en {search_year}/{mes:02d} ({max_day} días en paralelo)...", end=" ", flush=True)
                 
-                # Buscar TODOS los días del mes (de más reciente a más antiguo)
-                for dia in range(max_day, 0, -1):
-                    fecha = f"{search_year}{mes:02d}{dia:02d}"
-                    api_url = f"{self.api_url}/boe/sumario/{fecha}"
+                # Crear lista de días a buscar (de más reciente a más antiguo)
+                dias_buscar = [(search_year, mes, dia) for dia in range(max_day, 0, -1)]
+                
+                # Buscar todos los días del mes en paralelo
+                with ThreadPoolExecutor(max_workers=10) as executor:
+                    futures = {executor.submit(buscar_dia, dia_tuple): dia_tuple for dia_tuple in dias_buscar}
                     
-                    try:
-                        response = requests.get(api_url, timeout=5, headers={'Accept': 'application/json'})
-                        if response.status_code != 200:
-                            continue
-                        
-                        data = response.json()
-                        doc_id = self._search_in_json(data, year)
-                        
-                        if doc_id:
-                            print(f"✅ (día {dia})")
-                            return f"{self.base_url}/diario_boe/txt.php?id={doc_id}"
-                    
-                    except:
-                        continue
+                    for future in as_completed(futures):
+                        result = future.result()
+                        if result:
+                            fecha, url = result
+                            print(f"✅ (encontrado en {fecha})")
+                            return url
                 
                 print("❌")
             
@@ -169,31 +186,24 @@ class BOEAutoDiscovery:
             for mes in [1, 2]:
                 max_day = 29 if mes == 2 and year % 4 == 0 else (28 if mes == 2 else 31)
                 
-                print(f"   → Buscando en {year}/{mes:02d}...", end=" ", flush=True)
+                print(f"   → Buscando en {year}/{mes:02d} ({max_day} días en paralelo)...", end=" ", flush=True)
                 
-                for dia in range(max_day, 0, -1):
-                    fecha = f"{year}{mes:02d}{dia:02d}"
-                    api_url = f"{self.api_url}/boe/sumario/{fecha}"
+                dias_buscar = [(year, mes, dia) for dia in range(max_day, 0, -1)]
+                
+                with ThreadPoolExecutor(max_workers=10) as executor:
+                    futures = {executor.submit(buscar_dia, dia_tuple): dia_tuple for dia_tuple in dias_buscar}
                     
-                    try:
-                        response = requests.get(api_url, timeout=5, headers={'Accept': 'application/json'})
-                        if response.status_code != 200:
-                            continue
-                        
-                        data = response.json()
-                        doc_id = self._search_in_json(data, year)
-                        
-                        if doc_id:
-                            print(f"✅ (día {dia})")
-                            return f"{self.base_url}/diario_boe/txt.php?id={doc_id}"
-                    
-                    except:
-                        continue
+                    for future in as_completed(futures):
+                        result = future.result()
+                        if result:
+                            fecha, url = result
+                            print(f"✅ (encontrado en {fecha})")
+                            return url
                 
                 print("❌")
             
             return None
-            
+        
         except Exception as e:
             print(f"   ⚠️  Error en auto-discovery: {e}")
             return None

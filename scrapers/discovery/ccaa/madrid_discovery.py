@@ -150,15 +150,35 @@ def auto_discover_madrid(year: int) -> Dict[str, Optional[str]]:
     print(f"🔎 AUTO-DISCOVERY BOCM MADRID {year}")
     print("=" * 80)
     
-    urls = {
-        'autonomicos': buscar_orden_autonomicos(year),
-        'locales': buscar_orden_locales(year)
-    }
+    # Paralelizar búsquedas de autonómicos y locales
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    import time
+    
+    start_time = time.time()
+    urls = {'autonomicos': None, 'locales': None}
+    
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        # Lanzar ambas búsquedas en paralelo
+        future_autonomicos = executor.submit(buscar_orden_autonomicos, year)
+        future_locales = executor.submit(buscar_orden_locales, year)
+        
+        # Recoger resultados
+        for future in as_completed([future_autonomicos, future_locales]):
+            try:
+                if future == future_autonomicos:
+                    urls['autonomicos'] = future.result()
+                else:
+                    urls['locales'] = future.result()
+            except Exception as e:
+                print(f"   ⚠️  Error en búsqueda: {e}")
+    
+    elapsed = time.time() - start_time
     
     print("=" * 80)
     print("📋 RESULTADOS:")
     print(f"   Autonómicos: {urls['autonomicos'] or 'NO ENCONTRADO'}")
     print(f"   Locales: {urls['locales'] or 'NO ENCONTRADO'}")
+    print(f"   ⏱️  Tiempo: {elapsed:.2f}s")
     print("=" * 80)
     
     return urls

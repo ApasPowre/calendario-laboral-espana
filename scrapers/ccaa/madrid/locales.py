@@ -17,10 +17,6 @@ class MadridLocalesScraper(BaseScraper):
     Municipios: 179
     """
     
-    # URLs conocidas de resoluciones de festivos locales
-    KNOWN_URLS = {
-        2026: "https://www.bocm.es/boletin/CM_Orden_BOCM/2025/12/12/BOCM-20251212-34.PDF",
-    }
     CACHE_FILE = "config/madrid_urls_cache.json"
     
     def __init__(self, year: int, municipio: Optional[str] = None):
@@ -100,20 +96,14 @@ class MadridLocalesScraper(BaseScraper):
         
         year_str = str(self.year)
         
-        # 1. KNOWN_URLS (oficial)
-        if self.year in self.KNOWN_URLS:
-            url = self.KNOWN_URLS[self.year]
-            print(f"✅ URL oficial (KNOWN_URLS) para {self.year}: {url}")
-            return url
-        
-        # 2. Cache
+        # 1. Cache
         if year_str in self.cached_urls:
             url = self.cached_urls[year_str]
             print(f"📦 URL en cache para {self.year}: {url}")
             return url
         
-        # 3. Auto-discovery
-        print(f"🔍 Auto-discovery para {self.year} (no está en cache ni KNOWN_URLS)...")
+        # 2. Auto-discovery
+        print(f"🔍 Auto-discovery para {self.year} (no está en cache)...")
         
         urls = auto_discover_madrid(self.year)
         url_locales = urls.get('locales')
@@ -124,7 +114,7 @@ class MadridLocalesScraper(BaseScraper):
             self._save_to_cache(year_str, url_locales)
             return url_locales
         
-        # 4. Si todo falla, dar instrucciones
+        # 3. Si todo falla, dar instrucciones
         raise ValueError(
             f"\n❌ No se pudo encontrar URL para {self.year}.\n\n"
             f"Auto-discovery falló. Para añadir manualmente:\n"
